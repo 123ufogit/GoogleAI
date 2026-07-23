@@ -21,8 +21,8 @@
    */
   function initMap() {
     const map = L.map('map', {
-      center: [35.6812, 139.7671], // 東京
-      zoom: 10,
+      center: [36.432416, 136.639853], // 石川県農林総合研究センター林業試験場
+      zoom: 15,
       zoomControl: true,
       attributionControl: true
     });
