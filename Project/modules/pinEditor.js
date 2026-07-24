@@ -363,6 +363,14 @@
       GIS.AppState.map.off('click');
       document.getElementById('location-mode-overlay').classList.add('hidden');
       GIS.AppState.map.getContainer().classList.remove('location-mode');
+
+      // 仮マーカーを削除
+      if (GIS.AppState.tempMarker) {
+        GIS.AppState.map.removeLayer(GIS.AppState.tempMarker);
+        GIS.AppState.tempMarker = null;
+      }
+
+      this._resetButtons();
     },
 
     /**

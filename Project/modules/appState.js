@@ -175,6 +175,9 @@
       this.pendingImages = [];
       this.currentPendingIndex = 0;
       this.locationMode = false;
+      if (this.tempMarker && this.map) {
+        try { this.map.removeLayer(this.tempMarker); } catch (_) {}
+      }
       this.tempMarker = null;
     }
   };
