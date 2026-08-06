@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.bak
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+
+# IDEs
+.vscode/
+.idea/
+
+# GIS Data Outputs and Cache
+*.tif
+*.tiff
+*.shp
+*.shx
+*.dbf
+*.prj
+*.geojson
+dem_layout.js
+map.html
+
+# XML / ZIP Source data
+*.xml
+*.zip
+
+# Logs
+*.log
+test_mock_output/
+test_mock_output_muni/
+conversion_log.txt
