@@ -668,6 +668,39 @@ def extract_mesh_code(filename):
         return match.group(1)
     return os.path.splitext(filename)[0]
 
+def parse_mesh_code(filename):
+    """ファイル名に含まれるメッシュコード（1次/2次/3次）から中心緯度・経度(lat, lon)を算出する"""
+    mesh = extract_mesh_code(filename).replace("-", "")
+    if len(mesh) < 4 or not mesh[:4].isdigit():
+        return None
+
+    p1p2 = int(mesh[:2])
+    q1q2 = int(mesh[2:4])
+    lat = p1p2 / 1.5
+    lon = q1q2 + 100.0
+
+    if len(mesh) >= 6 and mesh[4:6].isdigit():
+        r1 = int(mesh[4])
+        r2 = int(mesh[5])
+        lat += r1 * (5.0 / 60.0)
+        lon += r2 * (7.5 / 60.0)
+
+        if len(mesh) >= 8 and mesh[6:8].isdigit():
+            s1 = int(mesh[6])
+            s2 = int(mesh[7])
+            lat += s1 * (0.5 / 60.0)
+            lon += s2 * (0.75 / 60.0)
+            lat += 0.25 / 60.0
+            lon += 0.375 / 60.0
+        else:
+            lat += 2.5 / 60.0
+            lon += 3.75 / 60.0
+    else:
+        lat += 20.0 / 60.0
+        lon += 30.0 / 60.0
+
+    return lat, lon
+
 def scan_input_directory_for_crs(input_dir):
     """入力フォルダをスキャンし、最初に見つかったXML等から推奨の系番号(1〜19)、元データがJGD2000かどうか、座標を返す"""
     for root_dir, _, filenames in os.walk(input_dir):
@@ -763,6 +796,14 @@ class ConverterApp(tk.Tk):
         self.output_filename_var = tk.StringVar(value="dem_merged.tif")
         self.output_filename_entry = ttk.Entry(folder_frame, textvariable=self.output_filename_var, width=50)
         self.output_filename_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.EW)
+
+        # Download help link for GSI Fundamental Geospatial Data
+        gsi_download_label = ttk.Label(folder_frame, text="データダウンロード: 国土地理院 基盤地図情報ダウンロードサービス (https://service.gsi.go.jp/kiban/app/map/?search=base)", font=("Helvetica", 8), cursor="hand2", foreground="blue")
+        gsi_download_label.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(2, 0))
+        gsi_download_label.bind("<Button-1>", lambda e: self.open_gsi_download_url())
+
+        gsi_note_label = ttk.Label(folder_frame, text="※ データのダウンロードおよび利用にあたっては「国土地理院コンテンツ利用規約」をご確認ください。", font=("Helvetica", 8), foreground="#555555")
+        gsi_note_label.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(0, 2))
 
         folder_frame.columnconfigure(1, weight=1)
 
@@ -860,11 +901,21 @@ class ConverterApp(tk.Tk):
         log_frame = ttk.LabelFrame(main_frame, text="処理ログ / 進捗状況", padding="5")
         log_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Log header frame with save button
+        log_header_frame = ttk.Frame(log_frame)
+        log_header_frame.pack(fill=tk.X, pady=(0, 5))
+
+        self.save_log_btn = ttk.Button(log_header_frame, text="処理ログを保存...", command=self.save_log_file)
+        self.save_log_btn.pack(side=tk.RIGHT)
+
+        log_content_frame = ttk.Frame(log_frame)
+        log_content_frame.pack(fill=tk.BOTH, expand=True)
+
         # Text log widget with Scrollbar
-        self.log_text = tk.Text(log_frame, wrap=tk.WORD, height=12, state=tk.DISABLED, font=("Consolas", 9))
+        self.log_text = tk.Text(log_content_frame, wrap=tk.WORD, height=12, state=tk.DISABLED, font=("Consolas", 9))
         self.log_text.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
-        scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
+        scrollbar = ttk.Scrollbar(log_content_frame, command=self.log_text.yview)
         scrollbar.pack(fill=tk.Y, side=tk.RIGHT)
         self.log_text.config(yscrollcommand=scrollbar.set)
 
@@ -873,6 +924,33 @@ class ConverterApp(tk.Tk):
 
         # Initialize output filename state
         self.update_output_filename_state()
+
+    def save_log_file(self):
+        log_content = self.log_text.get("1.0", tk.END).strip()
+        if not log_content:
+            messagebox.showinfo("お知らせ", "保存する処理ログが存在しません。")
+            return
+
+        initial_dir = self.output_dir_var.get().strip()
+        if not initial_dir or not os.path.isdir(initial_dir):
+            initial_dir = self.input_dir_var.get().strip()
+        if not initial_dir or not os.path.isdir(initial_dir):
+            initial_dir = os.path.expanduser("~")
+
+        file_selected = filedialog.asksaveasfilename(
+            title="処理ログの保存先を選択",
+            initialdir=initial_dir,
+            initialfile="conversion_log.txt",
+            defaultextension=".txt",
+            filetypes=[("テキストファイル", "*.txt"), ("すべてのファイル", "*.*")]
+        )
+        if file_selected:
+            try:
+                with open(file_selected, "w", encoding="utf-8") as f:
+                    f.write(log_content + "\n")
+                messagebox.showinfo("完了", f"処理ログを保存しました:\n{os.path.basename(file_selected)}")
+            except Exception as e:
+                messagebox.showerror("エラー", f"処理ログの保存に失敗しました:\n{str(e)}")
 
     def on_input_dir_changed(self, *args):
         input_dir = self.input_dir_var.get().strip()
@@ -1141,6 +1219,10 @@ class ConverterApp(tk.Tk):
         import webbrowser
         webbrowser.open("https://www.stat.go.jp/data/mesh/index.html")
 
+    def open_gsi_download_url(self):
+        import webbrowser
+        webbrowser.open("https://service.gsi.go.jp/kiban/app/map/?search=base")
+
     def on_muni_csv_changed(self, *args):
         csv_path = self.muni_csv_var.get().strip()
         if not csv_path or not os.path.isfile(csv_path):
@@ -1340,6 +1422,21 @@ class ConverterApp(tk.Tk):
                 messagebox.showerror("エラー", "有効な市区町村を選択してください。")
                 return
 
+            # 事前チェック: 選択された市区町村に合致するDEMメッシュファイルが存在するか確認
+            if self.scanned_metadata_cache:
+                allowed_meshes = self.muni_map[muni_name]
+                matching_count = sum(
+                    1 for m in self.scanned_metadata_cache
+                    if m.get('mesh_code', '').replace("-", "") in allowed_meshes
+                )
+                if matching_count == 0:
+                    messagebox.showwarning(
+                        "対象外の市区町村",
+                        f"選択した市区町村 ({muni_name}) の範囲内に対象となるDEMファイルが存在しません。\n"
+                        f"対象市区町村を選択し直すか、フィルターを解除してください。"
+                    )
+                    return
+
         try:
             os.makedirs(output_dir, exist_ok=True)
         except Exception as e:
@@ -1364,99 +1461,74 @@ class ConverterApp(tk.Tk):
         threading.Thread(target=self.run_conversion_thread, args=(input_dir, output_dir), daemon=True).start()
 
     def run_conversion_thread(self, input_dir, output_dir):
-        log_filepath = os.path.join(output_dir, "conversion_log.txt")
-
-        # Setup python logging to write to file
-        logger = logging.getLogger("gsi_converter")
-        logger.setLevel(logging.INFO)
-        logger.handlers = []
-
-        try:
-            file_handler = logging.FileHandler(log_filepath, encoding="utf-8")
-            file_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s'))
-            logger.addHandler(file_handler)
-        except Exception as e:
-            self.log(f"ログファイルを作成できませんでした: {str(e)}", "WARNING")
-
-        def log_msg(msg, level="INFO"):
-            self.log(msg, level)
-            if level == "INFO":
-                logger.info(msg)
-            elif level == "WARNING":
-                logger.warning(msg)
-            elif level == "ERROR":
-                logger.error(msg)
-            elif level == "SUCCESS":
-                logger.info(f"SUCCESS: {msg}")
-
-        log_msg("変換処理を開始します。")
-        log_msg(f"入力フォルダ: {input_dir}")
-        log_msg(f"出力フォルダ: {output_dir}")
-
-        crs_selection = self.crs_var.get()
-        match = re.search(r'EPSG:(\d+)', crs_selection)
-        if match:
-            default_epsg = int(match.group(1))
-        else:
-            default_epsg = 6697
-
-        log_msg(f"デフォルト座標系 (EPSG): {default_epsg}")
-
-        # Scan for target files
-        all_files = []
-        for root_dir, _, filenames in os.walk(input_dir):
-            for f in filenames:
-                ext = os.path.splitext(f)[1].lower()
-                if ext in ['.xml', '.zip']:
-                    all_files.append(os.path.join(root_dir, f))
-
-        total_files = len(all_files)
-        if total_files == 0:
-            log_msg("入力フォルダ内に XML または ZIP ファイルが見つかりませんでした。", "WARNING")
-            messagebox.showinfo("お知らせ", "処理対象のファイルが見つかりませんでした。")
-            self.finish_conversion()
-            return
-
-        log_msg(f"処理対象ファイルを検出しました: {total_files} 件")
-
         success_count = 0
         error_count = 0
         skipped_count = 0
-
-        # Features list for GeoJSON
-        success_features = []
-        temp_tiff_paths = []
-
-        # Determine merge mode
+        total_files = 0
         should_merge = self.merge_var.get()
-        
-        # Determine final merged filename
-        if should_merge:
-            merged_filename = self.output_filename_var.get().strip()
-            if not merged_filename:
-                merged_filename = self.get_default_merged_filename()
-            if not merged_filename.lower().endswith(('.tif', '.tiff')):
-                merged_filename += ".tif"
-        else:
-            merged_filename = "merged.tif"
-
-        # Create temporary directory if merging
+        merged_filename = "merged.tif"
         temp_dir = None
-        work_dir = output_dir
-        if should_merge:
-            temp_dir = tempfile.TemporaryDirectory()
-            work_dir = temp_dir.name
-            log_msg(f"結合モード: 一時作業ディレクトリを作成しました: {work_dir}")
 
-        # Determine filter mode
-        should_filter = self.muni_filter_enabled_var.get()
-        muni_name = self.muni_select_var.get().strip()
-        allowed_meshes = self.muni_map.get(muni_name, set()) if should_filter else set()
-        
-        if should_filter:
-            log_msg(f"市区町村フィルター有効: {muni_name} のメッシュのみ変換します。")
+        def log_msg(msg, level="INFO"):
+            self.log(msg, level)
 
         try:
+            log_msg("変換処理を開始します。")
+            log_msg(f"入力フォルダ: {input_dir}")
+            log_msg(f"出力フォルダ: {output_dir}")
+
+            crs_selection = self.crs_var.get()
+            match = re.search(r'EPSG:(\d+)', crs_selection)
+            if match:
+                default_epsg = int(match.group(1))
+            else:
+                default_epsg = 6697
+
+            log_msg(f"デフォルト座標系 (EPSG): {default_epsg}")
+
+            # Scan for target files
+            all_files = []
+            for root_dir, _, filenames in os.walk(input_dir):
+                for f in filenames:
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in ['.xml', '.zip']:
+                        all_files.append(os.path.join(root_dir, f))
+
+            total_files = len(all_files)
+            if total_files == 0:
+                log_msg("入力フォルダ内に XML または ZIP ファイルが見つかりませんでした。", "WARNING")
+                self.after(0, lambda: messagebox.showinfo("お知らせ", "処理対象のファイルが見つかりませんでした。"))
+                return
+
+            log_msg(f"処理対象ファイルを検出しました: {total_files} 件")
+
+            # Features list for GeoJSON
+            success_features = []
+            temp_tiff_paths = []
+
+            # Determine final merged filename
+            if should_merge:
+                merged_filename = self.output_filename_var.get().strip()
+                if not merged_filename:
+                    merged_filename = self.get_default_merged_filename()
+                if not merged_filename.lower().endswith(('.tif', '.tiff')):
+                    merged_filename += ".tif"
+
+            # Create temporary directory if merging
+            work_dir = output_dir
+            if should_merge:
+                temp_dir = tempfile.TemporaryDirectory()
+                work_dir = temp_dir.name
+                log_msg(f"結合モード: 一時作業ディレクトリを作成しました: {work_dir}")
+
+            # Determine filter mode
+            should_filter = self.muni_filter_enabled_var.get()
+            muni_name = self.muni_select_var.get().strip()
+            allowed_meshes = self.muni_map.get(muni_name, set()) if should_filter else set()
+            
+            if should_filter:
+                log_msg(f"市区町村フィルター有効: {muni_name} のメッシュのみ変換します。")
+
             # Process each file sequentially
             for idx, file_path in enumerate(all_files):
                 basename = os.path.basename(file_path)
@@ -1470,7 +1542,7 @@ class ConverterApp(tk.Tk):
                     try:
                         mesh_code = extract_mesh_code(basename)
                         if should_filter and mesh_code.replace("-", "") not in allowed_meshes:
-                            logger.info(f"Skipped {basename} - not in municipality {muni_name}")
+                            self.log(f"スキップ: {basename} (市区町村 {muni_name} 範囲外)")
                             skipped_count += 1
                             continue
 
@@ -1525,7 +1597,7 @@ class ConverterApp(tk.Tk):
                                 mesh_code = extract_mesh_code(member_basename)
                                 
                                 if should_filter and mesh_code.replace("-", "") not in allowed_meshes:
-                                    logger.info(f"Skipped ZIP member {member_basename} in {basename} - not in municipality {muni_name}")
+                                    self.log(f"スキップ: ZIP内ファイル {member_basename} (市区町村 {muni_name} 範囲外)")
                                     skipped_count += 1
                                     continue
 
@@ -1738,12 +1810,19 @@ class ConverterApp(tk.Tk):
                     f.write(MAP_HTML_TEMPLATE)
                 log_msg(f"Leaflet地図ビューアを出力しました: map.html")
 
+        except Exception as e:
+            err_msg = f"変換処理全体で予期せぬエラーが発生しました:\n{traceback.format_exc()}"
+            self.log(err_msg, "ERROR")
+            error_count += 1
         finally:
             if temp_dir:
-                temp_dir.cleanup()
-                log_msg("一時作業ディレクトリを削除しました。")
+                try:
+                    temp_dir.cleanup()
+                    log_msg("一時作業ディレクトリを削除しました。")
+                except Exception:
+                    pass
             
-            # Reset UI and notify user
+            # Reset UI and notify user safely on GUI thread
             try:
                 self.after(0, lambda: self.progress_var.set(100))
                 self.after(0, self.finish_conversion)
@@ -1751,9 +1830,9 @@ class ConverterApp(tk.Tk):
                     self.after(0, lambda: self.show_completion_dialog(
                         output_dir, success_count, error_count, skipped_count, merged_filename, should_merge
                     ))
-                else:
+                elif total_files > 0:
                     self.after(0, lambda: messagebox.showerror(
-                        "エラー", "変換に成功したファイルがありませんでした。処理ログをご確認ください。"
+                        "エラー", "変換に成功したファイルがありませんでした。選択した市区町村とメッシュが一致しているか、処理ログをご確認ください。"
                     ))
             except Exception:
                 # Fallback for headless testing
@@ -1929,7 +2008,7 @@ class ConverterApp(tk.Tk):
                     mask = (out_data != -9999.0)
                     out_data = fillnodata(out_data, mask, max_search_distance=100.0)
                 except Exception as ex:
-                    logger.error(f"Failed to fill nodata: {ex}")
+                    self.log(f"Null値補完中にエラーが発生しました: {ex}", "WARNING")
 
         # Write data to GeoTIFF using rasterio with LZW compression
         with rasterio.open(
@@ -1954,9 +2033,9 @@ class ConverterApp(tk.Tk):
         self.start_btn.config(state=tk.NORMAL)
         self.input_btn.config(state=tk.NORMAL)
         self.output_btn.config(state=tk.NORMAL)
-        self.crs_combo.config(state=tk.READONLY)
+        self.crs_combo.config(state="readonly")
         self.muni_csv_btn.config(state=tk.NORMAL)
-        if self.muni_map:
+        if hasattr(self, 'muni_map') and self.muni_map:
             self.muni_combo.config(state="readonly")
             self.muni_filter_check.config(state="normal")
 

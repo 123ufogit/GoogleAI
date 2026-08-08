@@ -1,0 +1,51 @@
+name: CI & Tests
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Checks & Unit Tests (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (Linux Tkinter & Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Syntax Check (py_compile)
+        run: uv run python -m py_compile gsi_dem_converter.py gsi_road_building_merger.py
+
+      - name: Run Unit Tests (Linux Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run uv run python -m unittest discover -s . -p "*test*.py"
+
+      - name: Run Unit Tests (Windows)
+        if: runner.os != 'Linux'
+        run: uv run python -m unittest discover -s . -p "*test*.py"

@@ -48,9 +48,26 @@ uv run gsi-road-merger
 uv run python gsi_road_building_merger.py
 ```
 
+### 2. GitHub Actions (CI / 自動テスト)
+
+本リポジトリには `.github/workflows/ci.yml` が含まれており、GitHub にプッシュまたは Pull Request を作成するたびに自動的に以下のチェックが実行されます：
+
+*   **依存関係自動同期 (`uv sync`)**
+*   **構文チェック (`py_compile`)**
+*   **Linux (Xvfb) / Windows 上でのテスト自動実行 (`unittest`)**
+
+ローカルで動作確認やテストを実行する場合は以下のコマンドを使用してください：
+```bash
+# 構文チェック
+uv run python -m py_compile gsi_dem_converter.py gsi_road_building_merger.py
+
+# ユニットテストの実行
+uv run python -m unittest discover
+```
+
 ---
 
-### 2. Conda を使用する方法（従来の方法）
+### 3. Conda を使用する方法（従来の方法）
 
 Conda（Anaconda / Miniconda）を使用する場合は、`environment.yml` から環境を構築できます。
 
