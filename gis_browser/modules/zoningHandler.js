@@ -59,6 +59,11 @@
 
     /**
      * 閾値に基づきラスタピクセルを2色に高速色分け描画した Canvas DataURL を生成する
+     * 
+     * 【ピクセル可視性条件】
+     *  - ピクセル値 0 <= val <= 9 のみを表示対象とし、それ以外 (val < 0 または val > 9, noData, NaN) は【完全透明】とする。
+     *  - 表示対象 (0〜9) 内のピクセルを 閾値 t で 2 色に分け（val <= t は colorLow, val > t は colorHigh）に描画。
+     * 
      * @param {object} info - entry.geotiffInfo
      * @returns {string} DataURL (PNG)
      */
@@ -77,6 +82,7 @@
       const rgbHigh = this.hexToRgb(colorHigh || '#ffff00');
 
       const totalPixels = outW * outH;
+      const t = parseFloat(threshold !== undefined ? threshold : 4.0);
 
       for (let i = 0; i < totalPixels; i++) {
         let val;
@@ -89,13 +95,15 @@
         const isNoData = (noData !== undefined && val === noData) || !isFinite(val);
         const bufIdx = i * 4;
 
-        if (isNoData) {
+        // ピクセル値 0 <= val <= 9 以外（< 0, > 9, noData）は【透明】
+        if (isNoData || val < 0 || val > 9) {
           buf[bufIdx]     = 0;
           buf[bufIdx + 1] = 0;
           buf[bufIdx + 2] = 0;
-          buf[bufIdx + 3] = 0;
+          buf[bufIdx + 3] = 0; // 完全透明
         } else {
-          if (val <= threshold) {
+          // 0 <= val <= 9 のピクセルを 閾値 t で 2 色に分岐
+          if (val <= t) {
             buf[bufIdx]     = rgbLow.r;
             buf[bufIdx + 1] = rgbLow.g;
             buf[bufIdx + 2] = rgbLow.b;
@@ -104,7 +112,7 @@
             buf[bufIdx + 1] = rgbHigh.g;
             buf[bufIdx + 2] = rgbHigh.b;
           }
-          buf[bufIdx + 3] = 220; // ベースアルファ値
+          buf[bufIdx + 3] = 220; // 描画
         }
       }
 
@@ -113,29 +121,22 @@
     },
 
     /**
-     * スライダのステップ位置 (0〜9) から実際の閾値の数値へ変換
+     * スライダのステップ位置 (0〜9) から閾値の数値へ変換
      * @param {number} step 0〜9
-     * @param {number} minV 
-     * @param {number} maxV 
      * @returns {number}
      */
-    stepToThreshold(step, minV, maxV) {
-      if (maxV === minV) return minV;
-      const s = Math.max(0, Math.min(9, step));
-      return minV + (maxV - minV) * (s / 9.0);
+    stepToThreshold(step) {
+      return Math.max(0, Math.min(9, parseFloat(step)));
     },
 
     /**
-     * 実際の閾値の数値からスライダのステップ位置 (0〜9) へ変換
+     * 閾値の数値からスライダのステップ位置 (0〜9) へ変換
      * @param {number} threshold 
-     * @param {number} minV 
-     * @param {number} maxV 
      * @returns {number}
      */
-    thresholdToStep(threshold, minV, maxV) {
-      if (maxV <= minV) return 0;
-      const step = ((threshold - minV) / (maxV - minV)) * 9.0;
-      return Math.max(0, Math.min(9, step));
+    thresholdToStep(threshold) {
+      if (threshold === undefined || isNaN(threshold)) return 4.0;
+      return Math.max(0, Math.min(9, parseFloat(threshold)));
     },
 
     /**
@@ -147,10 +148,9 @@
       const info = entry.geotiffInfo;
       if (!info) return '';
 
-      const minV = info.minVal;
-      const maxV = info.maxVal;
-      const currentThresh = info.threshold !== undefined ? info.threshold : (minV + (maxV - minV) * 0.5);
-      const currentStep = this.thresholdToStep(currentThresh, minV, maxV);
+      const currentThresh = info.threshold !== undefined ? info.threshold : 4.0;
+      const currentStep = this.thresholdToStep(currentThresh);
+      const currentMode = info.mode || 'profitability';
 
       // 0〜9 目盛り表示
       let ticksHtml = '<div class="zoning-ticks">';
@@ -163,37 +163,39 @@
         <div class="zoning-drawer hidden" id="zoning-drawer-${entry.id}">
           <div class="zoning-drawer-inner">
             
-            <!-- レンダリングモード切替 -->
+            <!-- レンダリングモード切替 （収益性 vs 災害リスク） -->
             <div class="zoning-section-title">🎨 スタイルモード</div>
             <div class="zoning-mode-pills">
-              <button class="zoning-mode-pill ${info.mode === 'threshold' ? 'active' : ''}" 
-                      data-id="${entry.id}" data-mode="threshold">
-                ⚡ 2色ゾーニング
+              <button class="zoning-mode-pill ${currentMode === 'profitability' || currentMode === 'threshold' ? 'active' : ''}" 
+                      data-id="${entry.id}" data-mode="profitability"
+                      title="収益性評価 (≤ t: #00d7ff, > t: #ffff00)">
+                🌲 2色ゾーニング／収益性
               </button>
-              <button class="zoning-mode-pill ${info.mode === 'grayscale' ? 'active' : ''}" 
-                      data-id="${entry.id}" data-mode="grayscale">
-                📷 原画像 / グレースケール
+              <button class="zoning-mode-pill ${currentMode === 'disaster_risk' ? 'active' : ''}" 
+                      data-id="${entry.id}" data-mode="disaster_risk"
+                      title="災害リスク評価 (≤ t: #00d7ff, > t: #ff55ff)">
+                ⚠️ 2色ゾーニング／災害リスク
               </button>
             </div>
 
-            <!-- 10分割・閾値スライダコントロール (最小値0〜最大値9) -->
-            <div class="zoning-controls-group ${info.mode === 'grayscale' ? 'disabled-group' : ''}">
+            <!-- 0〜9 ピクセル値 閾値スライダコントロール (表示範囲: 0〜9固定, それ以外透明) -->
+            <div class="zoning-controls-group">
               <div class="zoning-label-row">
-                <span class="zoning-label">📊 閾値 (ステップ 0〜9):</span>
+                <span class="zoning-label">📊 閾値 (表示ピクセル: 0〜9):</span>
                 <span class="zoning-value-badge" id="zoning-val-${entry.id}">
-                  S:${currentStep.toFixed(1)} (${currentThresh.toFixed(2)})
+                  閾値: ${currentStep.toFixed(1)}
                 </span>
               </div>
               
               <div class="zoning-slider-container">
                 <input type="range" class="zoning-slider" id="zoning-slider-${entry.id}"
-                       min="0" max="9" step="0.1" value="${currentStep.toFixed(1)}"
+                       min="0" max="9" step="0.5" value="${currentStep.toFixed(1)}"
                        data-id="${entry.id}">
                 ${ticksHtml}
               </div>
 
               <!-- 0〜9 クイックステップボタン -->
-              <div class="zoning-quick-steps" title="クリックしてステップ0〜9に一発セット">
+              <div class="zoning-quick-steps" title="クリックして閾値を0〜9にセット">
                 ${Array.from({ length: 10 }, (_, i) => {
                   return `<button class="zoning-step-btn" data-id="${entry.id}" data-step="${i}">
                     ${i}
@@ -204,13 +206,13 @@
               <!-- 2色カラーピッカー -->
               <div class="zoning-color-row">
                 <div class="zoning-color-picker-item">
-                  <label for="color-low-${entry.id}">閾値以下 (≤):</label>
+                  <label for="color-low-${entry.id}">閾値以下 (≤ t):</label>
                   <input type="color" id="color-low-${entry.id}" class="zoning-color-input" 
                          value="${info.colorLow || '#00d7ff'}" data-id="${entry.id}" data-type="colorLow">
                   <span class="color-preview-code">${info.colorLow || '#00d7ff'}</span>
                 </div>
                 <div class="zoning-color-picker-item">
-                  <label for="color-high-${entry.id}">閾値超過 (>):</label>
+                  <label for="color-high-${entry.id}">閾値超過 (> t):</label>
                   <input type="color" id="color-high-${entry.id}" class="zoning-color-input" 
                          value="${info.colorHigh || '#ffff00'}" data-id="${entry.id}" data-type="colorHigh">
                   <span class="color-preview-code">${info.colorHigh || '#ffff00'}</span>
@@ -264,19 +266,38 @@
         });
       }
 
-      // モード切り替えボタン
+      // モード切り替えボタン (収益性 vs 災害リスク)
       liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`).forEach(btn => {
         btn.addEventListener('click', () => {
           const mode = btn.dataset.mode;
           liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`).forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
 
-          const controlsGroup = liElement.querySelector('.zoning-controls-group');
-          if (controlsGroup) {
-            controlsGroup.classList.toggle('disabled-group', mode === 'grayscale');
+          let colorLow = '#00d7ff';
+          let colorHigh = '#ffff00';
+
+          if (mode === 'disaster_risk') {
+            colorLow = '#00d7ff';
+            colorHigh = '#ff55ff';
+          } else {
+            colorLow = '#00d7ff';
+            colorHigh = '#ffff00';
           }
 
-          this.updateSymbology(layerId, { mode });
+          // カラーピッカー表示の同期更新
+          const lowInput = liElement.querySelector(`input[data-type="colorLow"][data-id="${layerId}"]`);
+          const highInput = liElement.querySelector(`input[data-type="colorHigh"][data-id="${layerId}"]`);
+
+          if (lowInput) {
+            lowInput.value = colorLow;
+            if (lowInput.nextElementSibling) lowInput.nextElementSibling.textContent = colorLow;
+          }
+          if (highInput) {
+            highInput.value = colorHigh;
+            if (highInput.nextElementSibling) highInput.nextElementSibling.textContent = colorHigh;
+          }
+
+          this.updateSymbology(layerId, { mode, colorLow, colorHigh });
         });
       });
 
@@ -285,34 +306,21 @@
       const valBadge = liElement.querySelector(`#zoning-val-${layerId}`);
       if (slider) {
         slider.addEventListener('input', (e) => {
-          const stepVal = parseFloat(e.target.value);
-          const threshVal = this.stepToThreshold(stepVal, info.minVal, info.maxVal);
-          if (valBadge) valBadge.textContent = `S:${stepVal.toFixed(1)} (${threshVal.toFixed(2)})`;
+          const threshVal = parseFloat(e.target.value);
+          if (valBadge) valBadge.textContent = `閾値: ${threshVal.toFixed(1)}`;
 
-          // 2色モードに自動切り替え＆リアルタイム描画
-          const modeBtns = liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`);
-          modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === 'threshold'));
-          const controlsGroup = liElement.querySelector('.zoning-controls-group');
-          if (controlsGroup) controlsGroup.classList.remove('disabled-group');
-
-          this.updateSymbology(layerId, { threshold: threshVal, mode: 'threshold' });
+          this.updateSymbology(layerId, { threshold: threshVal });
         });
       }
 
       // 0〜9 クイックステップボタン
       liElement.querySelectorAll(`.zoning-step-btn[data-id="${layerId}"]`).forEach(btn => {
         btn.addEventListener('click', () => {
-          const stepVal = parseInt(btn.dataset.step, 10);
-          const threshVal = this.stepToThreshold(stepVal, info.minVal, info.maxVal);
-          if (slider) slider.value = stepVal;
-          if (valBadge) valBadge.textContent = `S:${stepVal} (${threshVal.toFixed(2)})`;
+          const threshVal = parseInt(btn.dataset.step, 10);
+          if (slider) slider.value = threshVal;
+          if (valBadge) valBadge.textContent = `閾値: ${threshVal.toFixed(1)}`;
 
-          const modeBtns = liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`);
-          modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === 'threshold'));
-          const controlsGroup = liElement.querySelector('.zoning-controls-group');
-          if (controlsGroup) controlsGroup.classList.remove('disabled-group');
-
-          this.updateSymbology(layerId, { threshold: threshVal, mode: 'threshold' });
+          this.updateSymbology(layerId, { threshold: threshVal });
         });
       });
 

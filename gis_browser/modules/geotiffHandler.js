@@ -175,7 +175,7 @@
             colorLow: '#00d7ff',
             colorHigh: '#ffff00',
             opacity: 0.85,
-            mode: 'grayscale', // 'grayscale' | 'threshold'
+            mode: 'profitability',
             initialDataUrl: dataUrl
           }
         });
