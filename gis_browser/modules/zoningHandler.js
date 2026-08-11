@@ -26,11 +26,11 @@
     },
 
     /**
-     * GeoTIFFレイヤーのシンボロジ設定を更新し、マップ表示を再描画する
+     * GeoTIFFレイヤーのシンボロジ設定を更新し、マップ表示を再描画する（非同期対応）
      * @param {string} layerId 
-     * @param {object} updates - { threshold, colorLow, colorHigh, opacity, mode }
+     * @param {object} updates - { threshold, colorLow, colorHigh, opacity, mode, useForestMask }
      */
-    updateSymbology(layerId, updates = {}) {
+    async updateSymbology(layerId, updates = {}) {
       const entry = GIS.AppState.layers.get(layerId);
       if (!entry || entry.type !== 'geotiff' || !entry.geotiffInfo) return;
 
@@ -42,32 +42,31 @@
         entry.layer.setOpacity(info.opacity);
       }
 
-      // レンダリングモードの切り替え
-      if (info.mode === 'grayscale') {
-        if (info.initialDataUrl) {
-          entry.layer.setUrl(info.initialDataUrl);
-        }
-        return;
+      // 閾値2色色分け Canvas を作成
+      const geoCanvas = this.createThresholdCanvas(info);
+      if (!geoCanvas) return;
+
+      // 森林計画対象ベクトルタイルによるマスク (destination-in clipping)
+      // ベクトルタイルの範囲外のピクセルは透明化される
+      if (info.useForestMask !== false && GIS.VectorTileMask && info.bounds) {
+        await GIS.VectorTileMask.applyMaskToCanvas(geoCanvas, info.bounds);
       }
 
-      // 閾値2色色分け描画 (Threshold Zoning)
-      const dataUrl = this.renderThresholdCanvas(info);
-      if (dataUrl) {
-        entry.layer.setUrl(dataUrl);
-      }
+      const dataUrl = geoCanvas.toDataURL('image/png');
+      entry.layer.setUrl(dataUrl);
     },
 
     /**
-     * 閾値に基づきラスタピクセルを2色に高速色分け描画した Canvas DataURL を生成する
+     * 閾値に基づきラスタピクセルを2色に高速色分け描画した HTMLCanvasElement を生成する
      * 
      * 【ピクセル可視性条件】
      *  - ピクセル値 0 <= val <= 9 のみを表示対象とし、それ以外 (val < 0 または val > 9, noData, NaN) は【完全透明】とする。
      *  - 表示対象 (0〜9) 内のピクセルを 閾値 t で 2 色に分け（val <= t は colorLow, val > t は colorHigh）に描画。
      * 
      * @param {object} info - entry.geotiffInfo
-     * @returns {string} DataURL (PNG)
+     * @returns {HTMLCanvasElement} Canvas
      */
-    renderThresholdCanvas(info) {
+    createThresholdCanvas(info) {
       const { rasterData, outW, outH, samplesPerPixel, noData, threshold, colorLow, colorHigh } = info;
       if (!rasterData) return null;
 
@@ -117,7 +116,7 @@
       }
 
       ctx.putImageData(imgData, 0, 0);
-      return canvas.toDataURL('image/png');
+      return canvas;
     },
 
     /**
@@ -220,6 +219,21 @@
               </div>
             </div>
 
+            <!-- 森林計画対象領域マスク切替 -->
+            <div class="zoning-section-title" style="margin-top:12px;">🌲 森林計画対象マスク (範囲外透明)</div>
+            <div class="zoning-mode-pills">
+              <button class="zoning-mask-pill ${info.useForestMask !== false ? 'active' : ''}" 
+                      data-id="${entry.id}" data-mask="1"
+                      title="森林計画対象森林のベクトルタイル範囲外を自動で透明にします">
+                ✂️ マスクON (対象森林のみ)
+              </button>
+              <button class="zoning-mask-pill ${info.useForestMask === false ? 'active' : ''}" 
+                      data-id="${entry.id}" data-mask="0"
+                      title="GeoTIFFの全体を表示します">
+                🌐 マスクOFF (全域表示)
+              </button>
+            </div>
+
             <!-- 5段階透過性 (Opacity) 設定 -->
             <div class="zoning-section-title" style="margin-top:12px;">👻 透過性 (オパシティ)</div>
             <div class="zoning-opacity-pills">
@@ -244,7 +258,7 @@
     },
 
     /**
-     * ドロワー内のUIイベント（スライダ、カラーピッカー、透過度ボタン）のバインド
+     * ドロワー内のUIイベント（スライダ、カラーピッカー、透過度ボタン、マスクボタン）のバインド
      * @param {string} layerId 
      * @param {HTMLElement} liElement 
      */
@@ -298,6 +312,17 @@
           }
 
           this.updateSymbology(layerId, { mode, colorLow, colorHigh });
+        });
+      });
+
+      // マスク切り替えボタン
+      liElement.querySelectorAll(`.zoning-mask-pill[data-id="${layerId}"]`).forEach(btn => {
+        btn.addEventListener('click', () => {
+          const isMaskOn = btn.dataset.mask === '1';
+          liElement.querySelectorAll(`.zoning-mask-pill[data-id="${layerId}"]`).forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          this.updateSymbology(layerId, { useForestMask: isMaskOn });
         });
       });
 

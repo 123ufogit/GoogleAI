@@ -64,6 +64,11 @@
     GIS.AppState.map = map;
     GIS.AppState._basemaps = basemaps;
     GIS.AppState._currentBasemap = 'standard';
+
+    // 森林計画対象森林 ベクトルタイルレイヤー初期化
+    if (GIS.VectorTileMask) {
+      GIS.VectorTileMask.initLeafletLayer(map);
+    }
   }
 
   /**
@@ -96,6 +101,15 @@
    * UIコントロール初期化
    */
   function initControls() {
+    // 森林計画対象森林 ベクトルタイルレイヤー トグルボタン
+    const vtBtn = document.getElementById('btn-toggle-fr-tiles');
+    if (vtBtn) {
+      vtBtn.addEventListener('click', () => {
+        const isVisible = GIS.VectorTileMask.toggleLayer(GIS.AppState.map);
+        vtBtn.classList.toggle('active', isVisible);
+      });
+    }
+
     // ベースマップ切り替え
     document.querySelectorAll('[data-basemap]').forEach(btn => {
       btn.addEventListener('click', () => {
