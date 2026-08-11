@@ -16,10 +16,11 @@
   GIS.VectorTileMask = {
     vtLayer: null,
     vtVisible: false,
+    labelGroup: null,
 
     /**
      * Leaflet マップ上に 森林計画対象森林 ベクトルタイルレイヤーを初期化する
-     * （GeoTIFF等のラスタオーバーレイよりも常に手前 zIndex:550 に表示）
+     * （薄いグレーのラインスタイル、zIndex:550最前面、林班番号ラベル表示）
      * @param {L.Map} map 
      */
     initLeafletLayer(map) {
@@ -28,32 +29,39 @@
         return;
       }
 
-      // GeoTIFF (zIndex 400前後) より常に手前に表示される専用ペイン (zIndex 550) を作成
+      // GeoTIFF より常に手前に表示される専用ペイン (zIndex 550)
       if (!map.getPane('vectorTilePane')) {
         const pane = map.createPane('vectorTilePane');
         pane.style.zIndex = '550';
         pane.style.pointerEvents = 'none';
       }
 
+      // 林班番号ラベル専用ペイン (zIndex 560)
+      if (!map.getPane('vectorTileLabelPane')) {
+        const labelPane = map.createPane('vectorTileLabelPane');
+        labelPane.style.zIndex = '560';
+        labelPane.style.pointerEvents = 'none';
+      }
+
+      if (!this.labelGroup) {
+        this.labelGroup = L.layerGroup([], { pane: 'vectorTileLabelPane' }).addTo(map);
+      }
+
+      // 薄いグレーラインのスタイル設定 (#cbd5e1)
+      const grayLineStyle = {
+        fill: true,
+        fillColor: 'rgba(255, 255, 255, 0.04)',
+        fillOpacity: 0.04,
+        stroke: true,
+        color: 'rgba(203, 213, 225, 0.75)', // 薄いグレー
+        weight: 1.2
+      };
+
       this.vtLayer = L.vectorGrid.protobuf(VT_URL, {
         pane: 'vectorTilePane',
         vectorTileLayerStyles: {
-          fr_layer_pbf_2025: {
-            fill: true,
-            fillColor: '#10b981',
-            fillOpacity: 0.22,
-            stroke: true,
-            color: '#34d399',
-            weight: 1.5
-          },
-          default: {
-            fill: true,
-            fillColor: '#10b981',
-            fillOpacity: 0.22,
-            stroke: true,
-            color: '#34d399',
-            weight: 1.5
-          }
+          fr_layer_pbf_2025: grayLineStyle,
+          default: grayLineStyle
         },
         maxNativeZoom: 15,
         minZoom: 6,
@@ -62,6 +70,140 @@
 
       this.vtLayer.addTo(map);
       this.vtVisible = true;
+
+      // 地図移動・ズーム時に林班番号ラベルを更新
+      const onMapMove = () => this.updateRinbanLabels(map);
+      map.on('moveend zoomend', onMapMove);
+      onMapMove();
+    },
+
+    /**
+     * 現在の地図範囲に対応する林班番号ラベル (例: "101林班") を抽出して表示する
+     * @param {L.Map} map 
+     */
+    async updateRinbanLabels(map) {
+      if (!this.labelGroup || !this.vtVisible || !map) return;
+
+      const zoom = Math.floor(map.getZoom());
+      if (zoom < 13) {
+        // ズームアウト時はラベルをクリア
+        this.labelGroup.clearLayers();
+        return;
+      }
+
+      const VectorTileClass = window.VectorTile || window.vectorTile?.VectorTile;
+      if (!window.Pbf || !VectorTileClass) return;
+
+      const bounds = map.getBounds();
+      const tileZoom = Math.min(14, zoom);
+      const { minX, maxX, minY, maxY } = this.getTileBounds(bounds, tileZoom);
+
+      const addedKeys = new Set();
+      const newMarkers = [];
+
+      for (let tx = minX; tx <= maxX; tx++) {
+        for (let ty = minY; ty <= maxY; ty++) {
+          const key = `${tileZoom}_${tx}_${ty}`;
+          let buffer = tileCache.get(key);
+
+          if (!buffer) {
+            const url = VT_URL.replace('{z}', tileZoom).replace('{x}', tx).replace('{y}', ty);
+            try {
+              const res = await fetch(url);
+              if (res.ok) {
+                buffer = await res.arrayBuffer();
+                tileCache.set(key, buffer);
+              }
+            } catch (_) {}
+          }
+
+          if (buffer) {
+            try {
+              const pbf = new window.Pbf(new Uint8Array(buffer));
+              const vt = new VectorTileClass(pbf);
+              const layerName = vt.layers['fr_layer_pbf_2025'] ? 'fr_layer_pbf_2025' : Object.keys(vt.layers)[0];
+              const vtLayer = vt.layers[layerName];
+
+              if (vtLayer) {
+                const extent = vtLayer.extent || 4096;
+                for (let f = 0; f < vtLayer.length; f++) {
+                  const feat = vtLayer.feature(f);
+                  const props = feat.properties || {};
+
+                  // 林班番号のプロパティ値を取得
+                  const rinbanRaw = this._extractRinbanValue(props);
+                  if (!rinbanRaw) continue;
+
+                  const rinbanStr = String(rinbanRaw).trim();
+                  const labelText = rinbanStr.endsWith('林班') ? rinbanStr : `${rinbanStr}林班`;
+
+                  const rings = feat.loadGeometry();
+                  if (!rings || !rings.length) continue;
+
+                  // 重心（センタ）座標の計算
+                  let sumLat = 0, sumLng = 0, count = 0;
+                  for (const ring of rings) {
+                    for (const pt of ring) {
+                      const ll = this._tilePointToLatLng(pt.x, pt.y, tx, ty, tileZoom, extent);
+                      sumLat += ll.lat;
+                      sumLng += ll.lng;
+                      count++;
+                    }
+                  }
+
+                  if (count > 0) {
+                    const cLat = sumLat / count;
+                    const cLng = sumLng / count;
+
+                    // 重複表示防止用キー
+                    const dedupKey = `${labelText}_${cLat.toFixed(3)}_${cLng.toFixed(3)}`;
+                    if (addedKeys.has(dedupKey)) continue;
+                    addedKeys.add(dedupKey);
+
+                    const icon = L.divIcon({
+                      className: 'rinban-label-container',
+                      html: `<div class="rinban-label">${labelText}</div>`,
+                      iconSize: null
+                    });
+
+                    const marker = L.marker([cLat, cLng], {
+                      icon,
+                      interactive: false,
+                      pane: 'vectorTileLabelPane'
+                    });
+                    newMarkers.push(marker);
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      this.labelGroup.clearLayers();
+      newMarkers.forEach(m => this.labelGroup.addLayer(m));
+    },
+
+    /**
+     * フィーチャのプロパティから林班番号を検索抽出する
+     */
+    _extractRinbanValue(props) {
+      if (!props) return null;
+      const targetKeys = [
+        'rinban', 'RINBAN', 'Rinban', 'r_no', 'R_NO',
+        'rimban', 'RIMBAN', 'rin_num', 'R_NUM', '林班', '林班番号'
+      ];
+      for (const k of targetKeys) {
+        if (props[k] !== undefined && props[k] !== null && props[k] !== '') {
+          return props[k];
+        }
+      }
+      for (const k of Object.keys(props)) {
+        if (/rin|rim|林/i.test(k) && props[k]) {
+          return props[k];
+        }
+      }
+      return null;
     },
 
     /**

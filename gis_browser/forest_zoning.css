@@ -343,3 +343,25 @@
   border-color: #34d399;
   font-weight: 700;
 }
+
+/* 林班番号 (101林班) ラベルスタイル */
+.rinban-label-container {
+  background: transparent !important;
+  border: none !important;
+}
+
+.rinban-label {
+  display: inline-block;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(203, 213, 225, 0.5);
+  color: #f8fafc;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-base);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
