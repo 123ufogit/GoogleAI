@@ -113,6 +113,32 @@
     },
 
     /**
+     * スライダのステップ位置 (0〜9) から実際の閾値の数値へ変換
+     * @param {number} step 0〜9
+     * @param {number} minV 
+     * @param {number} maxV 
+     * @returns {number}
+     */
+    stepToThreshold(step, minV, maxV) {
+      if (maxV === minV) return minV;
+      const s = Math.max(0, Math.min(9, step));
+      return minV + (maxV - minV) * (s / 9.0);
+    },
+
+    /**
+     * 実際の閾値の数値からスライダのステップ位置 (0〜9) へ変換
+     * @param {number} threshold 
+     * @param {number} minV 
+     * @param {number} maxV 
+     * @returns {number}
+     */
+    thresholdToStep(threshold, minV, maxV) {
+      if (maxV <= minV) return 0;
+      const step = ((threshold - minV) / (maxV - minV)) * 9.0;
+      return Math.max(0, Math.min(9, step));
+    },
+
+    /**
      * レイヤー一覧アイテム内に組込む GeoTIFF シンボロジ UI ドロワーの HTML を生成
      * @param {object} entry 
      * @returns {string} HTML string
@@ -123,20 +149,15 @@
 
       const minV = info.minVal;
       const maxV = info.maxVal;
-      const range = maxV - minV;
-      const step = range > 0 ? range / 100 : 0.1;
-      const currentThresh = info.threshold !== undefined ? info.threshold : (minV + range * 0.5);
+      const currentThresh = info.threshold !== undefined ? info.threshold : (minV + (maxV - minV) * 0.5);
+      const currentStep = this.thresholdToStep(currentThresh, minV, maxV);
 
-      // 10分割目盛り数値
-      const stepInterval = range / 10;
+      // 0〜9 目盛り表示
       let ticksHtml = '<div class="zoning-ticks">';
-      for (let i = 0; i <= 10; i += 2) {
-        const val = minV + stepInterval * i;
-        ticksHtml += `<span>${val >= 100 ? Math.round(val) : val.toFixed(1)}</span>`;
+      for (let i = 0; i <= 9; i++) {
+        ticksHtml += `<span>${i}</span>`;
       }
       ticksHtml += '</div>';
-
-      const currentOpacityPct = Math.round((info.opacity !== undefined ? info.opacity : 0.85) * 100);
 
       return `
         <div class="zoning-drawer hidden" id="zoning-drawer-${entry.id}">
@@ -155,26 +176,27 @@
               </button>
             </div>
 
-            <!-- 10分割・閾値スライダコントロール -->
+            <!-- 10分割・閾値スライダコントロール (最小値0〜最大値9) -->
             <div class="zoning-controls-group ${info.mode === 'grayscale' ? 'disabled-group' : ''}">
               <div class="zoning-label-row">
-                <span class="zoning-label">📊 閾値 (10分割):</span>
-                <span class="zoning-value-badge" id="zoning-val-${entry.id}">${currentThresh.toFixed(2)}</span>
+                <span class="zoning-label">📊 閾値 (ステップ 0〜9):</span>
+                <span class="zoning-value-badge" id="zoning-val-${entry.id}">
+                  S:${currentStep.toFixed(1)} (${currentThresh.toFixed(2)})
+                </span>
               </div>
               
               <div class="zoning-slider-container">
                 <input type="range" class="zoning-slider" id="zoning-slider-${entry.id}"
-                       min="${minV}" max="${maxV}" step="${step}" value="${currentThresh}"
+                       min="0" max="9" step="0.1" value="${currentStep.toFixed(1)}"
                        data-id="${entry.id}">
                 ${ticksHtml}
               </div>
 
-              <!-- 10分割クイックステップボタン -->
-              <div class="zoning-quick-steps" title="クリックして10分割の各位置に閾値をセット">
-                ${Array.from({ length: 9 }, (_, i) => {
-                  const stepVal = minV + stepInterval * (i + 1);
-                  return `<button class="zoning-step-btn" data-id="${entry.id}" data-val="${stepVal}">
-                    ${i + 1}/10
+              <!-- 0〜9 クイックステップボタン -->
+              <div class="zoning-quick-steps" title="クリックしてステップ0〜9に一発セット">
+                ${Array.from({ length: 10 }, (_, i) => {
+                  return `<button class="zoning-step-btn" data-id="${entry.id}" data-step="${i}">
+                    ${i}
                   </button>`;
                 }).join('')}
               </div>
@@ -228,6 +250,8 @@
       const entry = GIS.AppState.layers.get(layerId);
       if (!entry || !entry.geotiffInfo) return;
 
+      const info = entry.geotiffInfo;
+
       // ドロワー開閉トグルボタン
       const drawerBtn = liElement.querySelector('.layer-zoning-toggle-btn');
       const drawer = liElement.querySelector(`#zoning-drawer-${layerId}`);
@@ -256,13 +280,14 @@
         });
       });
 
-      // 閾値スライダ
+      // 0〜9 閾値スライダ
       const slider = liElement.querySelector(`#zoning-slider-${layerId}`);
       const valBadge = liElement.querySelector(`#zoning-val-${layerId}`);
       if (slider) {
         slider.addEventListener('input', (e) => {
-          const val = parseFloat(e.target.value);
-          if (valBadge) valBadge.textContent = val.toFixed(2);
+          const stepVal = parseFloat(e.target.value);
+          const threshVal = this.stepToThreshold(stepVal, info.minVal, info.maxVal);
+          if (valBadge) valBadge.textContent = `S:${stepVal.toFixed(1)} (${threshVal.toFixed(2)})`;
 
           // 2色モードに自動切り替え＆リアルタイム描画
           const modeBtns = liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`);
@@ -270,23 +295,24 @@
           const controlsGroup = liElement.querySelector('.zoning-controls-group');
           if (controlsGroup) controlsGroup.classList.remove('disabled-group');
 
-          this.updateSymbology(layerId, { threshold: val, mode: 'threshold' });
+          this.updateSymbology(layerId, { threshold: threshVal, mode: 'threshold' });
         });
       }
 
-      // 10分割クイックステップボタン
+      // 0〜9 クイックステップボタン
       liElement.querySelectorAll(`.zoning-step-btn[data-id="${layerId}"]`).forEach(btn => {
         btn.addEventListener('click', () => {
-          const val = parseFloat(btn.dataset.val);
-          if (slider) slider.value = val;
-          if (valBadge) valBadge.textContent = val.toFixed(2);
+          const stepVal = parseInt(btn.dataset.step, 10);
+          const threshVal = this.stepToThreshold(stepVal, info.minVal, info.maxVal);
+          if (slider) slider.value = stepVal;
+          if (valBadge) valBadge.textContent = `S:${stepVal} (${threshVal.toFixed(2)})`;
 
           const modeBtns = liElement.querySelectorAll(`.zoning-mode-pill[data-id="${layerId}"]`);
           modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === 'threshold'));
           const controlsGroup = liElement.querySelector('.zoning-controls-group');
           if (controlsGroup) controlsGroup.classList.remove('disabled-group');
 
-          this.updateSymbology(layerId, { threshold: val, mode: 'threshold' });
+          this.updateSymbology(layerId, { threshold: threshVal, mode: 'threshold' });
         });
       });
 

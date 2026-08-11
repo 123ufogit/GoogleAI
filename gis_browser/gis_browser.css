@@ -343,7 +343,7 @@ html, body {
   position: fixed;
   top: 70px;
   right: 20px;
-  width: 300px;
+  width: 365px;
   z-index: var(--z-panel);
   background: rgba(10, 15, 30, 0.82);
   backdrop-filter: var(--glass-blur);
@@ -533,14 +533,16 @@ html, body {
 
 .layer-item {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   border: 1px solid transparent;
   transition: all var(--transition);
   min-width: 0;
+  width: 100%;
 }
 .layer-item:hover {
   background: var(--color-surface-hov);

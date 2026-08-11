@@ -68,7 +68,21 @@
   background: #0b2218 !important;
 }
 
-/* レイヤーアイテムヘッダー */
+/* フローティングパネル (横幅拡張 370px) */
+.floating-panel {
+  width: 370px;
+}
+
+/* レイヤーアイテム (垂直レイアウト) */
+.layer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
 .layer-item-header {
   display: flex;
   align-items: center;
@@ -98,15 +112,16 @@
 }
 
 /* ----------------------------------------------------------------
-   2. ゾーニング設定ドロワー UI
+   2. ゾーニング設定ドロワー UI (レイヤーヘッダーの真下に配置)
    ---------------------------------------------------------------- */
 .zoning-drawer {
   width: 100%;
-  margin-top: 8px;
-  background: rgba(4, 16, 11, 0.7);
-  border: 1px solid rgba(52, 211, 153, 0.2);
+  box-sizing: border-box;
+  margin-top: 6px;
+  background: rgba(4, 16, 11, 0.85);
+  border: 1px solid rgba(52, 211, 153, 0.25);
   border-radius: var(--radius-md);
-  padding: 10px;
+  padding: 12px;
   animation: slideDown 0.25s ease-out;
 }
 
@@ -239,11 +254,13 @@
 
 .zoning-step-btn {
   flex: 1;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--color-text-sub);
-  font-size: 10px;
-  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 0;
   border-radius: 3px;
   cursor: pointer;
   transition: var(--transition);
@@ -298,15 +315,17 @@
 .zoning-opacity-pills {
   display: flex;
   gap: 3px;
+  width: 100%;
 }
 
 .zoning-opacity-pill {
   flex: 1;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border);
   color: var(--color-text-sub);
   font-size: 10px;
-  padding: 4px 2px;
+  padding: 5px 2px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--transition);
