@@ -182,11 +182,20 @@
       li.dataset.layerId = entry.id;
 
       const typeIcon = this._getTypeIcon(entry.type);
+      const isGeoTiff = entry.type === 'geotiff' && entry.geotiffInfo;
+      const zoningBtnHtml = isGeoTiff ? `<button class="layer-zoning-toggle-btn" title="シンボロジ / ゾーニング設定" data-id="${entry.id}">🎨 スタイル</button>` : '';
+
+      const drawerHtml = (isGeoTiff && GIS.ZoningHandler) ? GIS.ZoningHandler.createDrawerHtml(entry) : '';
+
       li.innerHTML = `
-        <button class="layer-vis-btn" title="表示/非表示" data-id="${entry.id}">👁</button>
-        <span class="layer-type-icon">${typeIcon}</span>
-        <span class="layer-name" title="${entry.name}">${entry.name}</span>
-        <button class="layer-del-btn" title="削除" data-id="${entry.id}">✕</button>
+        <div class="layer-item-header">
+          <button class="layer-vis-btn" title="表示/非表示" data-id="${entry.id}">👁</button>
+          <span class="layer-type-icon">${typeIcon}</span>
+          <span class="layer-name" title="${entry.name}">${entry.name}</span>
+          ${zoningBtnHtml}
+          <button class="layer-del-btn" title="削除" data-id="${entry.id}">✕</button>
+        </div>
+        ${drawerHtml}
       `;
 
       li.querySelector('.layer-vis-btn').addEventListener('click', (e) => {
@@ -197,6 +206,10 @@
         e.stopPropagation();
         GIS.AppState.removeLayer(entry.id);
       });
+
+      if (isGeoTiff && GIS.ZoningHandler) {
+        GIS.ZoningHandler.bindDrawerEvents(entry.id, li);
+      }
 
       list.appendChild(li);
     },

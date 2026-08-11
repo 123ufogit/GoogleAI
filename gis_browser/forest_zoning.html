@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GIS Browser — Leaflet WebGIS ブラウザ</title>
-  <meta name="description" content="KML・GeoJSON・画像・GeoTIFFをドラッグ＆ドロップで地図に表示。位置情報付与・360°全天球画像対応・PDF出力。Leafletベースのスタンドアロン型WebGISブラウザ。">
+  <title>森林ゾーニングツール — GeoTIFF/WebGIS</title>
+  <meta name="description" content="GeoTIFF標高・傾斜・ラスタデータを即座に10分割閾値で2色色分け（#00d7ff / #ffff00）。5段階透過度調整機能付き。森林計画・ゾーニング・GISオーバーレイツール。">
 
   <!-- Open Graph -->
-  <meta property="og:title" content="GIS Browser — Leaflet WebGIS">
-  <meta property="og:description" content="KML・GeoJSON・画像・GeoTIFFをドラッグ＆ドロップで地図表示。位置情報付与・PDF出力対応。">
+  <meta property="og:title" content="森林ゾーニングツール — GeoTIFF WebGIS">
+  <meta property="og:description" content="GeoTIFFのピクセル値を10分割し閾値スライダで2色色分け・5段階透過度で可視化する森林GISツール。">
   <meta property="og:type" content="website">
 
   <!-- Google Fonts -->
@@ -20,8 +20,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 
-  <!-- App CSS -->
-  <link rel="stylesheet" href="gis_browser.css">
+  <!-- App CSS (Forest Zoning Dedicated) -->
+  <link rel="stylesheet" href="forest_zoning.css">
 </head>
 <body>
 
@@ -43,22 +43,25 @@
     <button class="basemap-btn" data-basemap="ortho" title="国土地理院 空中写真">
       📡 空中写真
     </button>
+    <button class="basemap-btn" data-basemap="hillshade" title="国土地理院 陰影起伏図">
+      ⛰️ 陰影起伏
+    </button>
     <button class="basemap-btn" data-basemap="osm" title="OpenStreetMap">
       🌍 OSM
     </button>
   </div>
 
   <!-- ==================== フローティングパネル ==================== -->
-  <div id="floating-panel" class="floating-panel" role="complementary" aria-label="GISコントロールパネル">
+  <div id="floating-panel" class="floating-panel" role="complementary" aria-label="森林ゾーニング コントロールパネル">
 
     <!-- パネルヘッダー（ドラッグハンドル） -->
     <div id="panel-header" class="panel-header">
       <div id="panel-drag-handle" class="panel-drag-handle" title="ドラッグして移動">
-        <span class="panel-logo">🗺️</span>
-        <span class="panel-title">GIS Browser</span>
+        <span class="panel-logo">🌲</span>
+        <span class="panel-title">森林ゾーニングツール</span>
       </div>
       <div class="panel-header-actions">
-        <button id="btn-help" class="panel-icon-btn" title="ヘルプ・利用規約" aria-label="ヘルプを開く">❓</button>
+        <button id="btn-help" class="panel-icon-btn" title="使い方ガイド" aria-label="ヘルプを開く">❓</button>
         <button id="panel-toggle" class="panel-icon-btn" title="折りたたむ" aria-label="パネルを折りたたむ">⌃</button>
       </div>
     </div>
@@ -68,11 +71,11 @@
 
       <!-- ドロップゾーン -->
       <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
-           aria-label="ファイルをドロップ、またはクリックして選択">
-        <div class="drop-zone-icon">📂</div>
+           aria-label="GeoTIFFやGISファイルをドロップ、またはクリックして選択">
+        <div class="drop-zone-icon">🛰️</div>
         <div class="drop-zone-text">
-          <strong>ここにファイルをドロップ</strong>
-          <span>KML · GeoJSON · GPX · 画像 · GeoTIFF</span>
+          <strong>GeoTIFF / GISデータをドロップ</strong>
+          <span>標高・傾斜GeoTIFF · KML · GeoJSON · GPX · 画像</span>
         </div>
         <input type="file" id="file-input" multiple
                accept=".kml,.kmz,.geojson,.json,.gpx,.tif,.tiff,.jpg,.jpeg,.png,.heic,.heif,.webp"
@@ -82,13 +85,13 @@
       <!-- レイヤーリスト -->
       <div id="layer-list-container" class="layer-list-container">
         <div class="layer-list-header">
-          <span class="layer-list-title">📚 レイヤー</span>
+          <span class="layer-list-title">📚 レイヤー＆ゾーニング</span>
           <button id="clear-all-btn" class="clear-all-btn" title="すべてのレイヤーを削除" aria-label="全レイヤー削除">
             🗑 全削除
           </button>
         </div>
         <ul id="layer-list" class="layer-list" role="list" aria-label="読み込み済みレイヤー">
-          <li class="layer-list-empty">レイヤーがありません</li>
+          <li class="layer-list-empty">GeoTIFFやGISデータがありません</li>
         </ul>
       </div>
 
@@ -140,7 +143,6 @@
       <span id="badge-360" class="badge-360 hidden">🌐 360°全天球</span>
     </div>
 
-    <!-- 自動回転ボタン行（360°画像のときのみ表示） -->
     <div id="rotate-btn-row" class="rotate-btn-row hidden">
       <button id="btn-rotate-toggle" class="btn-rotate-toggle" data-rotating="1">
         ⏸ 回転一時停止
@@ -168,7 +170,7 @@
     </div>
   </div>
 
-  <!-- ==================== 画像モーダル（フルサイズプレビュー） ==================== -->
+  <!-- ==================== 画像モーダル ==================== -->
   <div id="image-modal" class="image-modal hidden" role="dialog"
        aria-label="画像フルプレビュー" aria-modal="true">
     <div class="image-modal-inner">
@@ -180,99 +182,83 @@
     </div>
   </div>
 
-  <!-- ==================== PDF出力形式選択モーダル ==================== -->
+  <!-- ==================== PDF/PNG出力形式選択モーダル ==================== -->
   <div id="export-format-modal" class="export-format-modal hidden" role="dialog"
        aria-label="出力形式を選択" aria-modal="true">
     <div class="export-format-inner">
       <h2 class="export-format-title">📄 出力形式を選択</h2>
-      <p class="export-format-desc">地図をどの形式で保存しますか？</p>
+      <p class="export-format-desc">ゾーニングマップをどの形式で保存しますか？</p>
       <div class="export-format-buttons">
         <button id="export-format-pdf" class="export-format-btn export-format-btn-primary">
           <span class="export-format-icon">📄</span>
           <strong>PDF (A4横)</strong>
-          <small>印刷・共有に最適</small>
+          <small>印刷・報告書提出に最適</small>
         </button>
         <button id="export-format-png" class="export-format-btn">
           <span class="export-format-icon">🖼️</span>
           <strong>PNG 画像</strong>
-          <small>高解像度・透過対応</small>
+          <small>高解像度・透過レイヤー出力</small>
         </button>
       </div>
       <button id="export-format-cancel" class="export-format-cancel">キャンセル</button>
     </div>
   </div>
 
-  <!-- ==================== ❓ ヘルプモーダル ==================== -->
+  <!-- ==================== ❓ 使い方ヘルプモーダル ==================== -->
   <div id="help-modal" class="help-modal hidden" role="dialog"
-       aria-label="ヘルプ・利用規約" aria-modal="true">
+       aria-label="使い方ガイド" aria-modal="true">
     <div class="help-modal-inner">
       <div class="help-modal-header">
-        <span class="help-modal-title">❓ ヘルプ・ご利用にあたって</span>
-        <button id="help-modal-close" class="modal-close" aria-label="閉じる">✕</button>
+        <h2 class="help-modal-title">🌲 森林ゾーニングツールの使い方</h2>
+        <button id="help-modal-close" class="help-modal-close" aria-label="閉じる">✕</button>
       </div>
       <div class="help-modal-body">
+        
+        <div class="help-section">
+          <h3>⚡ 1. GeoTIFFのドロップと2色ゾーニング</h3>
+          <p>
+            標高データ(DEM)、傾斜データ、樹高データなどの <strong>GeoTIFF (.tif, .tiff)</strong> ファイルをドロップします。<br>
+            自動的に緯度経度を判別して地図上にオーバーレイ表示されます。
+          </p>
+        </div>
 
-        <section class="help-section">
-          <h3>📂 対応ファイル形式</h3>
-          <table class="help-table">
-            <tr><td>KML / KMZ</td><td>地物・ライン・ポリゴン</td></tr>
-            <tr><td>GeoJSON</td><td>ポイント・ライン・ポリゴン</td></tr>
-            <tr><td>GPX</td><td>ウェイポイント・トラック・ルート</td></tr>
-            <tr><td>JPEG / PNG / HEIC</td><td>GPS位置情報付き写真</td></tr>
-            <tr><td>GeoTIFF</td><td>衛星・航空画像ラスター（最大500MB+圧縮）</td></tr>
-          </table>
-        </section>
-
-        <section class="help-section">
-          <h3>🗺️ 基本操作</h3>
-          <ul class="help-list">
-            <li>ファイルをパネル枠または地図へ<strong>ドラッグ＆ドロップ</strong>で読み込み</li>
-            <li>GPS情報のない写真は<strong>撮影位置の特定モード</strong>で地図上にピン留め可能</li>
-            <li>読み込んだレイヤーはパネルから表示切替・削除できます</li>
-            <li>GeoJSON・KML・PDF/PNGへのエクスポートに対応</li>
-            <li><kbd>Esc</kbd> キーでモーダルを閉じます</li>
+        <div class="help-section">
+          <h3>🎨 2. 10分割スライダと色分け閾値設定</h3>
+          <p>
+            レイヤー一覧の <strong>「🎨 スタイル」</strong> ボタンをクリックすると、ゾーニング設定が開きます。
+          </p>
+          <ul>
+            <li><strong>10分割スライダ / クイックボタン:</strong> ピクセル値の最小〜最大間を10等分し、特定の閾値をリアルタイムに指定できます。</li>
+            <li><strong>2色色分け (#00d7ff / #ffff00):</strong> 閾値以下（水色 `#00d7ff`）と閾値超過（黄色 `#ffff00`）の2色に一瞬でマップを区分けします。カラーピッカーで自由な色に変更も可能です。</li>
           </ul>
-        </section>
+        </div>
 
-        <section class="help-section">
-          <h3>🔒 データの取り扱い</h3>
-          <p class="help-note">読み込んだファイル・写真・位置情報は<strong>すべてお使いのブラウザ内でのみ処理</strong>されます。外部サーバーへのアップロードは一切行いません。</p>
-        </section>
+        <div class="help-section">
+          <h3>👻 3. 5段階の透過度 (オパシティ) 選択</h3>
+          <p>
+            オパシティピルボタンから <strong>0% (完全不透明), 25%, 50%, 75%, 100% (完全透明)</strong> を選択でき、背景の国土地理院航空写真や陰影起伏図との重ね合わせ確認が簡単に行えます。
+          </p>
+        </div>
 
-        <section class="help-section">
-          <h3>📜 地図タイルの利用条件</h3>
-          <ul class="help-list attribution-list">
-            <li>
-              <strong>国土地理院（標準地図・空中写真）</strong><br>
-              <a href="https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html" target="_blank" rel="noopener">国土地理院コンテンツ利用規約</a> に基づき提供<br>
-              <span class="help-sub">出典：国土地理院タイル / © 国土地理院</span>
-            </li>
-            <li>
-              <strong>OpenStreetMap (OSM)</strong><br>
-              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a><br>
-              <span class="help-sub"><a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener">Open Database License (ODbL)</a> に基づき提供</span>
-            </li>
-          </ul>
-        </section>
-
-        <section class="help-section">
-          <h3>⚠️ 免責事項</h3>
-          <p class="help-note">面積・距離の計算値は球面近似による参考値です。法的判断・施工計画等には使用せず、測量専門機関による実測値をご確認ください。</p>
-        </section>
+        <div class="help-section">
+          <h3>🗺️ 4. 対応フォーマット</h3>
+          <p>
+            GeoTIFFのほか、KML / GeoJSON / GPX / 位置情報付き写真（360°全天球パノラマ含む）に対応しています。
+          </p>
+        </div>
 
       </div>
     </div>
   </div>
 
-  <!-- ==================== プログレスオーバーレイ（GeoTIFF処理中） ==================== -->
-  <div id="progress-overlay" class="progress-overlay hidden" role="progressbar"
-       aria-label="処理進捗" aria-live="polite">
-    <div class="progress-content">
-      <div class="progress-icon">🛰️</div>
-      <div id="progress-title" class="progress-title">処理中...</div>
-      <div id="progress-message" class="progress-message"></div>
-      <div class="progress-bar-container">
-        <div id="progress-bar-fill" class="progress-bar-fill"></div>
+  <!-- ==================== プログレスオーバーレイ ==================== -->
+  <div id="progress-overlay" class="progress-overlay hidden" role="status" aria-live="polite">
+    <div class="progress-card">
+      <div class="progress-spinner" aria-hidden="true"></div>
+      <div id="progress-title" class="progress-title">GeoTIFF 読み込み中...</div>
+      <div id="progress-message" class="progress-message">ファイルをデコードしています</div>
+      <div class="progress-bar-bg">
+        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
       </div>
       <div id="progress-percent" class="progress-percent">0%</div>
     </div>
@@ -281,27 +267,28 @@
   <!-- ==================== トースト通知 ==================== -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-  <!-- ==================== スクリプト読み込み ==================== -->
-  <!-- Leaflet JS -->
+  <!-- ==================== JS モジュール群 ==================== -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- モジュール（依存順に読み込む） -->
+  <!-- アプリケーションモジュール -->
   <script src="modules/ui.js"></script>
   <script src="modules/appState.js"></script>
-  <script src="modules/fileHandler.js"></script>
-  <script src="modules/floatingPanel.js"></script>
+  <script src="modules/geotiffHandler.js"></script>
+  <script src="modules/zoningHandler.js"></script>
   <script src="modules/kmlParser.js"></script>
   <script src="modules/geojsonHandler.js"></script>
   <script src="modules/gpxHandler.js"></script>
   <script src="modules/imageHandler.js"></script>
   <script src="modules/pinEditor.js"></script>
-  <script src="modules/geotiffHandler.js"></script>
-  <script src="modules/zoningHandler.js"></script>
+  <script src="modules/fileHandler.js"></script>
+  <script src="modules/floatingPanel.js"></script>
   <script src="modules/exportHandler.js"></script>
 
-  <!-- メインアプリ -->
-  <script src="gis_browser.js"></script>
+  <!-- 森林ゾーニングツール メイン初期化 -->
+  <script src="forest_zoning.js"></script>
 
 </body>
 </html>

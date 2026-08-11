@@ -118,10 +118,12 @@
 
         // Step 5: ラスタを出力解像度で直接読み込んで Canvas 化
         GIS.UI.updateProgress(45, 'ラスタデータを読み込んでいます...');
-        const dataUrl = await this._rasterToCanvas(
+        const rasterResult = await this._rasterToCanvas(
           image, outW, outH,
           (pct, msg) => GIS.UI.updateProgress(pct, msg)
         );
+
+        const dataUrl = rasterResult.dataUrl;
 
         // Step 6: Leaflet へ追加
         GIS.UI.updateProgress(97, '地図に追加中...');
@@ -145,16 +147,37 @@
                   ? `<div>表示サイズ: ${outW.toLocaleString()}×${outH.toLocaleString()}px</div>
                      <div class="compressed-badge">縮小表示中</div>`
                   : ''}
+                ${rasterResult.minVal !== undefined && rasterResult.minVal !== Infinity
+                  ? `<div style="margin-top:4px;font-size:11px;color:#94a3b8;">値範囲: ${rasterResult.minVal.toFixed(2)} 〜 ${rasterResult.maxVal.toFixed(2)}</div>`
+                  : ''}
               </div>
             `)
             .openOn(GIS.AppState.map);
         });
 
+        const minV = (rasterResult.minVal !== Infinity) ? rasterResult.minVal : 0;
+        const maxV = (rasterResult.maxVal !== -Infinity) ? rasterResult.maxVal : 255;
+
         GIS.AppState.addLayer({
           name: file.name,
           type: 'geotiff',
           layer: overlay,
-          file: file
+          file: file,
+          geotiffInfo: {
+            rasterData: rasterResult.rasterData,
+            minVal: minV,
+            maxVal: maxV,
+            noData: rasterResult.noData,
+            outW: outW,
+            outH: outH,
+            samplesPerPixel: rasterResult.samplesPerPixel,
+            threshold: minV + (maxV - minV) * 0.5,
+            colorLow: '#00d7ff',
+            colorHigh: '#ffff00',
+            opacity: 0.85,
+            mode: 'grayscale', // 'grayscale' | 'threshold'
+            initialDataUrl: dataUrl
+          }
         });
 
         GIS.AppState.map.fitBounds(bounds, { padding: [40, 40] });
@@ -451,7 +474,17 @@
       onProgress(95, '画像をエンコード中...');
       await this._yield();
 
-      return canvas.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/png');
+      return {
+        dataUrl,
+        rasterData: data,
+        minVal: grayMin,
+        maxVal: grayMax,
+        noData: noData,
+        outW: outW,
+        outH: outH,
+        samplesPerPixel: samplesPerPixel
+      };
     },
 
     // ------------------------------------------------------------------
