@@ -78,10 +78,11 @@ gis-browser/
 | [exifr](https://github.com/MikeKovarik/exifr) | 7.x | 動的（画像投入時のみ） | JPEG/HEIC EXIF 解析 |
 | [Pannellum](https://pannellum.org) | 2.5.6 | 動的（360°画像検出時のみ） | 全天球画像ビューア |
 | [geotiff.js](https://geotiffjs.github.io) | 2.x | 動的（GeoTIFF 投入時のみ） | GeoTIFF デコード |
+| [proj4js](https://github.com/proj4js/proj4js) | 2.15.0 | 動的（平面直交系GeoTIFF投入時のみ） | 平面直交座標系 ➔ 緯度経度 投影変換 |
 | [html2canvas](https://html2canvas.hertzen.com) | 1.4.1 | 動的（PDF 出力時のみ） | 地図キャプチャ |
 | [jsPDF](https://github.com/parallax/jsPDF) | 2.5.1 | 動的（PDF 出力時のみ） | PDF 生成 |
 
-> **設計方針**: exifr / Pannellum / geotiff.js / html2canvas / jsPDF はすべて **動的ロード**（必要時のみ CDN から取得）。通常利用時の初期ロードは Leaflet のみです。
+> **設計方針**: exifr / Pannellum / geotiff.js / proj4js / html2canvas / jsPDF はすべて **動的ロード**（必要時のみ CDN から取得）。通常利用時の初期ロードは Leaflet のみです。
 
 ---
 
@@ -104,7 +105,7 @@ gis-browser/
 | GeoJSON | `.geojson`, `.json` | FeatureCollection・SimpleStyle 対応 |
 | JPEG / PNG | `.jpg`, `.jpeg`, `.png` | EXIF GPS 読み取り・ピン表示 |
 | HEIC | `.heic`, `.heif` | Apple デバイス撮影写真（exifr 経由） |
-| GeoTIFF | `.tif`, `.tiff` | 地理参照付き衛星・航空画像（EPSG:4326/3857） |
+| GeoTIFF | `.tif`, `.tiff` | 地理参照付き衛星・航空画像（WGS84 / Web Mercator / JGD2011・JGD2000 平面直交第1〜19系 自動変換対応） |
 | 360°画像 | 上記画像形式全般 | アスペクト比 2:1 / XMP メタデータで自動検出 |
 
 ---
