@@ -47,9 +47,10 @@
       if (!geoCanvas) return;
 
       // 森林計画対象ベクトルタイルによるマスク (destination-in clipping)
-      // ベクトルタイルの範囲外のピクセルは透明化される
-      if (info.useForestMask !== false && GIS.VectorTileMask && info.bounds) {
+      // ベクトルタイルの範囲外のピクセルは常に透明化される
+      if (GIS.VectorTileMask && info.bounds) {
         await GIS.VectorTileMask.applyMaskToCanvas(geoCanvas, info.bounds);
+        GIS.VectorTileMask.bringToFront();
       }
 
       const dataUrl = geoCanvas.toDataURL('image/png');
@@ -219,21 +220,6 @@
               </div>
             </div>
 
-            <!-- 森林計画対象領域マスク切替 -->
-            <div class="zoning-section-title" style="margin-top:12px;">🌲 森林計画対象マスク (範囲外透明)</div>
-            <div class="zoning-mode-pills">
-              <button class="zoning-mask-pill ${info.useForestMask !== false ? 'active' : ''}" 
-                      data-id="${entry.id}" data-mask="1"
-                      title="森林計画対象森林のベクトルタイル範囲外を自動で透明にします">
-                ✂️ マスクON (対象森林のみ)
-              </button>
-              <button class="zoning-mask-pill ${info.useForestMask === false ? 'active' : ''}" 
-                      data-id="${entry.id}" data-mask="0"
-                      title="GeoTIFFの全体を表示します">
-                🌐 マスクOFF (全域表示)
-              </button>
-            </div>
-
             <!-- 5段階透過性 (Opacity) 設定 -->
             <div class="zoning-section-title" style="margin-top:12px;">👻 透過性 (オパシティ)</div>
             <div class="zoning-opacity-pills">
@@ -258,7 +244,7 @@
     },
 
     /**
-     * ドロワー内のUIイベント（スライダ、カラーピッカー、透過度ボタン、マスクボタン）のバインド
+     * ドロワー内のUIイベント（スライダ、カラーピッカー、透過度ボタン）のバインド
      * @param {string} layerId 
      * @param {HTMLElement} liElement 
      */
@@ -312,17 +298,6 @@
           }
 
           this.updateSymbology(layerId, { mode, colorLow, colorHigh });
-        });
-      });
-
-      // マスク切り替えボタン
-      liElement.querySelectorAll(`.zoning-mask-pill[data-id="${layerId}"]`).forEach(btn => {
-        btn.addEventListener('click', () => {
-          const isMaskOn = btn.dataset.mask === '1';
-          liElement.querySelectorAll(`.zoning-mask-pill[data-id="${layerId}"]`).forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-
-          this.updateSymbology(layerId, { useForestMask: isMaskOn });
         });
       });
 

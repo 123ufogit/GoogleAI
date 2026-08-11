@@ -19,6 +19,7 @@
 
     /**
      * Leaflet マップ上に 森林計画対象森林 ベクトルタイルレイヤーを初期化する
+     * （GeoTIFF等のラスタオーバーレイよりも常に手前 zIndex:550 に表示）
      * @param {L.Map} map 
      */
     initLeafletLayer(map) {
@@ -27,23 +28,31 @@
         return;
       }
 
+      // GeoTIFF (zIndex 400前後) より常に手前に表示される専用ペイン (zIndex 550) を作成
+      if (!map.getPane('vectorTilePane')) {
+        const pane = map.createPane('vectorTilePane');
+        pane.style.zIndex = '550';
+        pane.style.pointerEvents = 'none';
+      }
+
       this.vtLayer = L.vectorGrid.protobuf(VT_URL, {
+        pane: 'vectorTilePane',
         vectorTileLayerStyles: {
           fr_layer_pbf_2025: {
             fill: true,
             fillColor: '#10b981',
-            fillOpacity: 0.2,
+            fillOpacity: 0.22,
             stroke: true,
             color: '#34d399',
-            weight: 1.2
+            weight: 1.5
           },
           default: {
             fill: true,
             fillColor: '#10b981',
-            fillOpacity: 0.2,
+            fillOpacity: 0.22,
             stroke: true,
             color: '#34d399',
-            weight: 1.2
+            weight: 1.5
           }
         },
         maxNativeZoom: 15,
@@ -53,6 +62,15 @@
 
       this.vtLayer.addTo(map);
       this.vtVisible = true;
+    },
+
+    /**
+     * ベクトルタイルを最前面に移動する
+     */
+    bringToFront() {
+      if (this.vtLayer && this.vtLayer.bringToFront) {
+        try { this.vtLayer.bringToFront(); } catch (_) {}
+      }
     },
 
     /**
