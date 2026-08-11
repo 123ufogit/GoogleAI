@@ -214,7 +214,8 @@
   width: 100%;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, #00d7ff 0%, #ffff00 100%);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   outline: none;
   cursor: pointer;
   -webkit-appearance: none;
@@ -227,7 +228,7 @@
   border-radius: 50%;
   background: #ffffff;
   border: 2px solid #10b981;
-  box-shadow: 0 0 10px rgba(0, 215, 255, 0.8);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
   cursor: pointer;
   transition: transform 0.1s ease;
 }

@@ -194,15 +194,6 @@
                 ${ticksHtml}
               </div>
 
-              <!-- 0〜9 クイックステップボタン -->
-              <div class="zoning-quick-steps" title="クリックして閾値を0〜9にセット">
-                ${Array.from({ length: 10 }, (_, i) => {
-                  return `<button class="zoning-step-btn" data-id="${entry.id}" data-step="${i}">
-                    ${i}
-                  </button>`;
-                }).join('')}
-              </div>
-
               <!-- 2色カラーピッカー -->
               <div class="zoning-color-row">
                 <div class="zoning-color-picker-item">
@@ -312,17 +303,6 @@
           this.updateSymbology(layerId, { threshold: threshVal });
         });
       }
-
-      // 0〜9 クイックステップボタン
-      liElement.querySelectorAll(`.zoning-step-btn[data-id="${layerId}"]`).forEach(btn => {
-        btn.addEventListener('click', () => {
-          const threshVal = parseInt(btn.dataset.step, 10);
-          if (slider) slider.value = threshVal;
-          if (valBadge) valBadge.textContent = `閾値: ${threshVal.toFixed(1)}`;
-
-          this.updateSymbology(layerId, { threshold: threshVal });
-        });
-      });
 
       // カラーピッカー
       ['colorLow', 'colorHigh'].forEach(type => {
