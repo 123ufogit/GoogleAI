@@ -205,6 +205,25 @@
   border-radius: 4px;
 }
 
+/* マスク範囲ポリゴン選択ドロップダウン */
+.zoning-mask-select {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(6, 28, 20, 0.9);
+  border: 1px solid var(--color-border);
+  color: #e2e8f0;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: border-color 0.2s ease;
+}
+.zoning-mask-select:focus {
+  border-color: var(--color-emerald-primary);
+}
+
 /* スライダコンテナ & 目盛り */
 .zoning-slider-container {
   margin: 6px 0 8px 0;

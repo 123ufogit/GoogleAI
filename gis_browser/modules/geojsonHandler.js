@@ -58,6 +58,7 @@
         name: file.name,
         type: 'geojson',
         layer: leafletLayer,
+        rawGeoJSON: geojson,
         file: file
       });
 

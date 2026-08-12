@@ -46,11 +46,10 @@
       const geoCanvas = this.createThresholdCanvas(info);
       if (!geoCanvas) return;
 
-      // 森林計画対象ベクトルタイルによるマスク (destination-in clipping)
-      // ベクトルタイルの範囲外のピクセルは常に透明化される
+      // ベクトルポリゴンによるマスク (destination-in clipping)
+      // ベクトルデータの範囲外のピクセルは透明化される。指定なしまたは該当なし時は全表示
       if (GIS.VectorTileMask && info.bounds) {
-        await GIS.VectorTileMask.applyMaskToCanvas(geoCanvas, info.bounds);
-        GIS.VectorTileMask.bringToFront();
+        await GIS.VectorTileMask.applyMaskToCanvas(geoCanvas, info.bounds, info.maskLayerId);
       }
 
       const dataUrl = geoCanvas.toDataURL('image/png');
@@ -229,9 +228,33 @@
               }).join('')}
             </div>
 
+            <!-- マスク範囲ポリゴン選択 -->
+            <div class="zoning-section-title" style="margin-top:12px;">✂️ マスク範囲 (くり抜きポリゴン)</div>
+            <select class="zoning-mask-select" id="zoning-mask-${entry.id}" data-id="${entry.id}">
+              <option value="all" ${(!info.maskLayerId || info.maskLayerId === 'all') ? 'selected' : ''}>すべてのポリゴンレイヤー</option>
+              <option value="none" ${info.maskLayerId === 'none' ? 'selected' : ''}>なし (全体表示)</option>
+              ${this._getVectorLayerOptions(info.maskLayerId)}
+            </select>
+
           </div>
         </div>
       `;
+    },
+
+    /**
+     * AppState 内のベクトルレイヤーをドロップダウン <option> 要素群として取得
+     */
+    _getVectorLayerOptions(currentMaskLayerId) {
+      if (!GIS.AppState || !GIS.AppState.layers) return '';
+      const options = [];
+      GIS.AppState.layers.forEach((entry, id) => {
+        if (entry.type !== 'geotiff' && entry.type !== 'pin') {
+          const selected = currentMaskLayerId === id ? 'selected' : '';
+          const name = GIS.UI.escHtml(entry.name || '名称未設定ポリゴン');
+          options.push(`<option value="${id}" ${selected}>レイヤー: ${name}</option>`);
+        }
+      });
+      return options.join('');
     },
 
     /**
@@ -328,6 +351,15 @@
           this.updateSymbology(layerId, { opacity });
         });
       });
+
+      // マスク範囲ポリゴン選択ドロップダウン
+      const maskSelect = liElement.querySelector(`#zoning-mask-${layerId}`);
+      if (maskSelect) {
+        maskSelect.addEventListener('change', (e) => {
+          const maskLayerId = e.target.value;
+          this.updateSymbology(layerId, { maskLayerId });
+        });
+      }
     }
 
   };
