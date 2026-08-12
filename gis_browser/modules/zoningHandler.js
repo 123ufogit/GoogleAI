@@ -228,14 +228,6 @@
               }).join('')}
             </div>
 
-            <!-- マスク範囲ポリゴン選択 -->
-            <div class="zoning-section-title" style="margin-top:12px;">✂️ マスク範囲 (くり抜きポリゴン)</div>
-            <select class="zoning-mask-select" id="zoning-mask-${entry.id}" data-id="${entry.id}">
-              <option value="all" ${(!info.maskLayerId || info.maskLayerId === 'all') ? 'selected' : ''}>すべてのポリゴンレイヤー</option>
-              <option value="none" ${info.maskLayerId === 'none' ? 'selected' : ''}>なし (全体表示)</option>
-              ${this._getVectorLayerOptions(info.maskLayerId)}
-            </select>
-
           </div>
         </div>
       `;
@@ -351,19 +343,10 @@
           this.updateSymbology(layerId, { opacity });
         });
       });
-
-      // マスク範囲ポリゴン選択ドロップダウン
-      const maskSelect = liElement.querySelector(`#zoning-mask-${layerId}`);
-      if (maskSelect) {
-        maskSelect.addEventListener('change', (e) => {
-          const maskLayerId = e.target.value;
-          this.updateSymbology(layerId, { maskLayerId });
-        });
-      }
     },
 
     /**
-     * すべての GeoTIFF ドロワーおよび一括マスク選択バー内のドロップダウン選択肢を最新化する
+     * 一括マスク選択バー内のドロップダウン選択肢を最新化する
      */
     updateAllMaskSelectOptions() {
       if (!GIS.AppState || !GIS.AppState.layers) return;
@@ -378,21 +361,6 @@
           ${this._getVectorLayerOptions(currentBatch)}
         `;
       }
-
-      // 個別GeoTIFFドロワー内セレクターの更新
-      GIS.AppState.layers.forEach((entry, id) => {
-        if (entry.type === 'geotiff' && entry.geotiffInfo) {
-          const selectEl = document.getElementById(`zoning-mask-${id}`);
-          if (selectEl) {
-            const currentVal = entry.geotiffInfo.maskLayerId || 'all';
-            selectEl.innerHTML = `
-              <option value="all" ${currentVal === 'all' ? 'selected' : ''}>すべてのポリゴンレイヤー</option>
-              <option value="none" ${currentVal === 'none' ? 'selected' : ''}>なし (全体表示)</option>
-              ${this._getVectorLayerOptions(currentVal)}
-            `;
-          }
-        }
-      });
     },
 
     /**
@@ -424,8 +392,6 @@
       GIS.AppState.layers.forEach((entry, id) => {
         if (entry.type === 'geotiff' && entry.geotiffInfo) {
           entry.geotiffInfo.maskLayerId = maskLayerId;
-          const selectEl = document.getElementById(`zoning-mask-${id}`);
-          if (selectEl) selectEl.value = maskLayerId;
           promises.push(this.updateSymbology(id, { maskLayerId }));
         }
       });
