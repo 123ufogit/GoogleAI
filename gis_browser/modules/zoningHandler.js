@@ -221,7 +221,7 @@
                 { label: '75%',        opacity: 0.25 },
                 { label: '100% (透明)', opacity: 0.0 }
               ].map(item => {
-                const isActive = Math.abs((info.opacity ?? 0.85) - item.opacity) < 0.12;
+                const isActive = Math.abs((info.opacity ?? 0.5) - item.opacity) < 0.12;
                 return `<button class="zoning-opacity-pill ${isActive ? 'active' : ''}" 
                                 data-id="${entry.id}" data-opacity="${item.opacity}">
                   ${item.label}

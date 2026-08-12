@@ -130,7 +130,7 @@
         await this._yield();
 
         const overlay = L.imageOverlay(dataUrl, bounds, {
-          opacity: 0.85,
+          opacity: 0.5,
           interactive: true
         });
 
@@ -176,7 +176,7 @@
             threshold: 4.0,
             colorLow: '#00d7ff',
             colorHigh: '#ffff00',
-            opacity: 0.85,
+            opacity: 0.5,
             mode: 'profitability',
             initialDataUrl: dataUrl
           }
