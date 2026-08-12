@@ -242,20 +242,21 @@
         const lonlatRing = outerRing.map(([lat, lon]) => [lon, lat]);
         const area = this._calcPolygonArea(lonlatRing);
 
-        let zoningHtml = '';
-        if (GIS.ZoningAnalysis) {
-          const geom = { type: 'Polygon', coordinates: [lonlatRing] };
-          zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, area);
-        }
-
-        const popupHtml = `<div class="kml-popup">
-          <strong>${this._escHtml(name)}</strong>
-          ${desc ? `<div class="kml-desc">${this._escHtml(desc)}</div>` : ''}
-          <div class="popup-measure-badge popup-area">
-            📐 面積: <strong>${this._formatArea(area)}</strong>
-          </div>
-          ${zoningHtml}
-        </div>`;
+        const createPopup = () => {
+          let zoningHtml = '';
+          if (GIS.ZoningAnalysis) {
+            const geom = { type: 'Polygon', coordinates: [lonlatRing] };
+            zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, area);
+          }
+          return `<div class="kml-popup">
+            <strong>${this._escHtml(name)}</strong>
+            ${desc ? `<div class="kml-desc">${this._escHtml(desc)}</div>` : ''}
+            <div class="popup-measure-badge popup-area">
+              📐 面積: <strong>${this._formatArea(area)}</strong>
+            </div>
+            ${zoningHtml}
+          </div>`;
+        };
 
         const poly = L.polygon(latlngs, {
           color: style.lineColor || '#7c3aed',
@@ -263,7 +264,7 @@
           weight: style.lineWidth || 2,
           fillOpacity: style.fill === false ? 0 : 0.3,
           opacity: 0.9
-        }).bindPopup(popupHtml);
+        }).bindPopup(createPopup, { maxWidth: 340 });
         layers.push(poly);
       });
 

@@ -146,45 +146,46 @@
         `<td class="popup-val">${this._escHtml(String(v ?? ''))}</td></tr>`
       ).join('');
 
-      // 面積・距離バッジを生成
-      let measureBadge = '';
-      let zoningHtml = '';
-      if (geom) {
-        const type = geom.type;
-        if (type === 'Polygon' || type === 'MultiPolygon') {
-          const rings = type === 'Polygon'
-            ? [geom.coordinates[0]]
-            : geom.coordinates.map(p => p[0]);
-          let totalArea = 0;
-          rings.forEach(ring => { totalArea += this._calcPolygonArea(ring); });
-          measureBadge = `<div class="popup-measure-badge popup-area">
-            📐 面積: <strong>${this._formatArea(totalArea)}</strong>
-          </div>`;
+      const createPopupHtml = () => {
+        let measureBadge = '';
+        let zoningHtml = '';
+        if (geom) {
+          const type = geom.type;
+          if (type === 'Polygon' || type === 'MultiPolygon') {
+            const rings = type === 'Polygon'
+              ? [geom.coordinates[0]]
+              : geom.coordinates.map(p => p[0]);
+            let totalArea = 0;
+            rings.forEach(ring => { totalArea += this._calcPolygonArea(ring); });
+            measureBadge = `<div class="popup-measure-badge popup-area">
+              📐 面積: <strong>${this._formatArea(totalArea)}</strong>
+            </div>`;
 
-          if (GIS.ZoningAnalysis) {
-            zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, totalArea);
+            if (GIS.ZoningAnalysis) {
+              zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, totalArea);
+            }
+          } else if (type === 'LineString' || type === 'MultiLineString') {
+            const lines = type === 'LineString'
+              ? [geom.coordinates]
+              : geom.coordinates;
+            let totalDist = 0;
+            lines.forEach(line => { totalDist += this._calcLineLength(line); });
+            measureBadge = `<div class="popup-measure-badge popup-distance">
+              📏 距離: <strong>${this._formatDistance(totalDist)}</strong>
+            </div>`;
           }
-        } else if (type === 'LineString' || type === 'MultiLineString') {
-          const lines = type === 'LineString'
-            ? [geom.coordinates]
-            : geom.coordinates;
-          let totalDist = 0;
-          lines.forEach(line => { totalDist += this._calcLineLength(line); });
-          measureBadge = `<div class="popup-measure-badge popup-distance">
-            📏 距離: <strong>${this._formatDistance(totalDist)}</strong>
-          </div>`;
         }
-      }
 
-      const html = `<div class="geojson-popup">
-        ${name ? `<strong class="popup-name">${this._escHtml(name)}</strong>` : ''}
-        ${props.description ? `<p class="popup-desc">${this._escHtml(String(props.description))}</p>` : ''}
-        ${measureBadge}
-        ${zoningHtml}
-        ${tableRows ? `<table class="popup-table">${tableRows}</table>` : ''}
-      </div>`;
+        return `<div class="geojson-popup">
+          ${name ? `<strong class="popup-name">${this._escHtml(name)}</strong>` : ''}
+          ${props.description ? `<p class="popup-desc">${this._escHtml(String(props.description))}</p>` : ''}
+          ${measureBadge}
+          ${zoningHtml}
+          ${tableRows ? `<table class="popup-table">${tableRows}</table>` : ''}
+        </div>`;
+      };
 
-      layer.bindPopup(html, { maxWidth: 340 });
+      layer.bindPopup(createPopupHtml, { maxWidth: 340 });
     },
 
     // ------------------------------------------------------------------

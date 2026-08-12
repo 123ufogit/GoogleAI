@@ -11,7 +11,7 @@
      * 点 (lng, lat) が GeoJSON ポリゴン（リング配列）の内部にあるか判定する Ray Casting (光線判定) アルゴリズム
      * @param {number} lng 
      * @param {number} lat 
-     * @param {Array} ring - [[lng, lat], ...]
+     * @param {Array} ring - [[lng, lat], ...] または [{lat, lng}, ...]
      * @returns {boolean}
      */
     pointInPolygon(lng, lat, ring) {
@@ -38,7 +38,7 @@
       if (geometry.type === 'Polygon') {
         const outerRing = geometry.coordinates[0];
         if (!this.pointInPolygon(lng, lat, outerRing)) return false;
-        // 穴 (hole) の判定 (穴の内部にある場合は除外)
+        // 穴 (hole) の判定
         for (let h = 1; h < geometry.coordinates.length; h++) {
           if (this.pointInPolygon(lng, lat, geometry.coordinates[h])) return false;
         }
@@ -55,6 +55,29 @@
         });
       }
       return false;
+    },
+
+    /**
+     * GeoJSON ジオメトリの最小矩形バウンディングボックス (BBox) を計算する
+     */
+    _getBboxOfGeometry(geometry) {
+      let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
+      const processCoord = (pt) => {
+        const lng = Array.isArray(pt) ? pt[0] : pt.lng;
+        const lat = Array.isArray(pt) ? pt[1] : pt.lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      };
+      const processRing = ring => ring.forEach(processCoord);
+
+      if (geometry.type === 'Polygon') {
+        geometry.coordinates.forEach(processRing);
+      } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach(poly => poly.forEach(processRing));
+      }
+      return { minLng, maxLng, minLat, maxLat };
     },
 
     /**
@@ -91,11 +114,11 @@
     },
 
     /**
-     * 1レイヤー解析 (「高」: 5~9 / 「低」: 0~4)
+     * 1レイヤー解析 (「低」: 0~4 / 「高」: 5~9)
      */
     _analyzeSingleLayer(geometry, polygonAreaM2, geotiffEntry) {
       const info = geotiffEntry.geotiffInfo;
-      const { rasterData, outW, outH, bounds, threshold = 4.0 } = info;
+      const { rasterData, outW, outH, bounds, samplesPerPixel = 1 } = info;
       if (!rasterData || !bounds) return '';
 
       const minLat = typeof bounds.getSouth === 'function' ? bounds.getSouth() : bounds.minLat;
@@ -103,25 +126,40 @@
       const minLng = typeof bounds.getWest === 'function' ? bounds.getWest() : bounds.minLng;
       const maxLng = typeof bounds.getEast === 'function' ? bounds.getEast() : bounds.maxLng;
 
-      let countHigh = 0;
-      let countLow = 0;
+      // ポリゴンと GeoTIFF の交差 BBox を計算して高速走査
+      const polyBbox = this._getBboxOfGeometry(geometry);
+      const startLng = Math.max(minLng, polyBbox.minLng);
+      const endLng = Math.min(maxLng, polyBbox.maxLng);
+      const startLat = Math.max(minLat, polyBbox.minLat);
+      const endLat = Math.min(maxLat, polyBbox.maxLat);
+
+      if (startLng >= endLng || startLat >= endLat) return ''; // 交差なし
+
+      const minPx = Math.max(0, Math.floor(((startLng - minLng) / (maxLng - minLng)) * outW));
+      const maxPx = Math.min(outW, Math.ceil(((endLng - minLng) / (maxLng - minLng)) * outW));
+      const minPy = Math.max(0, Math.floor(((maxLat - endLat) / (maxLat - minLat)) * outH));
+      const maxPy = Math.min(outH, Math.ceil(((maxLat - startLat) / (maxLat - minLat)) * outH));
+
+      let countHigh = 0; // 5~9
+      let countLow = 0;  // 0~4
       let countTotalValid = 0;
 
-      for (let py = 0; py < outH; py++) {
+      const stride = samplesPerPixel || 1;
+
+      for (let py = minPy; py < maxPy; py++) {
         const lat = maxLat - ((py + 0.5) / outH) * (maxLat - minLat);
-        for (let px = 0; px < outW; px++) {
+        for (let px = minPx; px < maxPx; px++) {
           const lng = minLng + ((px + 0.5) / outW) * (maxLng - minLng);
 
           if (!this.isPointInGeometry(lng, lat, geometry)) continue;
 
-          const val = rasterData[py * outW + px];
+          const val = rasterData[(py * outW + px) * stride];
           // 有効ピクセル 0 <= val <= 9
           if (val === undefined || isNaN(val) || val < 0 || val > 9) continue;
 
           countTotalValid++;
-          // 0~4 は「低」、5~9 (または threshold 超) は「高」
-          const t = (threshold !== undefined) ? threshold : 4.0;
-          if (val > t) {
+          // 0~4 は「低」、5~9 (4超) は「高」
+          if (val > 4.0) {
             countHigh++;
           } else {
             countLow++;
@@ -134,12 +172,10 @@
       const pctHigh = ((countHigh / countTotalValid) * 100).toFixed(1);
       const pctLow = ((countLow / countTotalValid) * 100).toFixed(1);
 
-      // 各区分の推定面積
       const areaHigh = (polygonAreaM2 * (countHigh / countTotalValid));
       const areaLow = (polygonAreaM2 * (countLow / countTotalValid));
 
       const formatArea = (m2) => m2 >= 10000 ? `${(m2 / 10000).toFixed(2)} ha` : `${m2.toFixed(0)} m²`;
-
       const modeName = GIS.UI ? GIS.UI.escHtml(geotiffEntry.name || 'GeoTIFF') : (geotiffEntry.name || 'GeoTIFF');
 
       return `
@@ -178,8 +214,8 @@
       const infoR = riskEntry.geotiffInfo;
       if (!infoP.rasterData || !infoR.rasterData) return '';
 
-      const { rasterData: rDataP, outW: outWP, outH: outHP, bounds: boundsP, threshold: tP = 4.0 } = infoP;
-      const { rasterData: rDataR, outW: outWR, outH: outHR, bounds: boundsR, threshold: tR = 4.0 } = infoR;
+      const { rasterData: rDataP, outW: outWP, outH: outHP, bounds: boundsP, samplesPerPixel: strideP = 1 } = infoP;
+      const { rasterData: rDataR, outW: outWR, outH: outHR, bounds: boundsR, samplesPerPixel: strideR = 1 } = infoR;
 
       const minLatP = typeof boundsP.getSouth === 'function' ? boundsP.getSouth() : boundsP.minLat;
       const maxLatP = typeof boundsP.getNorth === 'function' ? boundsP.getNorth() : boundsP.maxLat;
@@ -191,20 +227,34 @@
       const minLngR = typeof boundsR.getWest === 'function' ? boundsR.getWest() : boundsR.minLng;
       const maxLngR = typeof boundsR.getEast === 'function' ? boundsR.getEast() : boundsR.maxLng;
 
-      let z1Count = 0; // 収益性:高, リスク:低
-      let z2Count = 0; // 収益性:高, リスク:高
-      let z3Count = 0; // 収益性:低, リスク:低
-      let z4Count = 0; // 収益性:低, リスク:高
+      // ポリゴンと GeoTIFF P の交差 BBox 計算
+      const polyBbox = this._getBboxOfGeometry(geometry);
+      const startLng = Math.max(minLngP, polyBbox.minLng);
+      const endLng = Math.min(maxLngP, polyBbox.maxLng);
+      const startLat = Math.max(minLatP, polyBbox.minLat);
+      const endLat = Math.min(maxLatP, polyBbox.maxLat);
+
+      if (startLng >= endLng || startLat >= endLat) return ''; // 交差なし
+
+      const minPx = Math.max(0, Math.floor(((startLng - minLngP) / (maxLngP - minLngP)) * outWP));
+      const maxPx = Math.min(outWP, Math.ceil(((endLng - minLngP) / (maxLngP - minLngP)) * outWP));
+      const minPy = Math.max(0, Math.floor(((maxLatP - endLat) / (maxLatP - minLatP)) * outHP));
+      const maxPy = Math.min(outHP, Math.ceil(((maxLatP - startLat) / (maxLatP - minLatP)) * outHP));
+
+      let z1Count = 0; // 収益性:高(5~9), リスク:低(0~4)
+      let z2Count = 0; // 収益性:高(5~9), リスク:高(5~9)
+      let z3Count = 0; // 収益性:低(0~4), リスク:低(0~4)
+      let z4Count = 0; // 収益性:低(0~4), リスク:高(5~9)
       let totalValid = 0;
 
-      for (let py = 0; py < outHP; py++) {
+      for (let py = minPy; py < maxPy; py++) {
         const lat = maxLatP - ((py + 0.5) / outHP) * (maxLatP - minLatP);
-        for (let px = 0; px < outWP; px++) {
+        for (let px = minPx; px < maxPx; px++) {
           const lng = minLngP + ((px + 0.5) / outWP) * (maxLngP - minLngP);
 
           if (!this.isPointInGeometry(lng, lat, geometry)) continue;
 
-          const valP = rDataP[py * outWP + px];
+          const valP = rDataP[(py * outWP + px) * strideP];
           if (valP === undefined || isNaN(valP) || valP < 0 || valP > 9) continue;
 
           // リスクレイヤーのピクセル位置
@@ -212,12 +262,12 @@
           const pyR = Math.floor(((maxLatR - lat) / (maxLatR - minLatR)) * outHR);
 
           if (pxR < 0 || pxR >= outWR || pyR < 0 || pyR >= outHR) continue;
-          const valR = rDataR[pyR * outWR + pxR];
+          const valR = rDataR[(pyR * outWR + pxR) * strideR];
           if (valR === undefined || isNaN(valR) || valR < 0 || valR > 9) continue;
 
           totalValid++;
-          const isProfHigh = valP > tP; // 0~4:低, 5~9:高
-          const isRiskHigh = valR > tR; // 0~4:低, 5~9:高
+          const isProfHigh = valP > 4.0; // 0~4:低, 5~9:高
+          const isRiskHigh = valR > 4.0; // 0~4:低, 5~9:高
 
           if (isProfHigh && !isRiskHigh) z1Count++;      // ゾーニング１: 収益高/リスク低
           else if (isProfHigh && isRiskHigh) z2Count++;  // ゾーニング２: 収益高/リスク高
