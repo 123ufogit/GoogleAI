@@ -380,6 +380,7 @@
       });
       await Promise.all(promises);
       this.updateMaskPolygonStyles();
+      this.updateLayerTotalSummary();
     },
 
     /**
@@ -397,6 +398,7 @@
       });
       await Promise.all(promises);
       this.updateMaskPolygonStyles();
+      this.updateLayerTotalSummary();
       GIS.UI.showToast(`✂️ 全GeoTIFFのマスク範囲を一括変更しました`, 'info');
     },
 
@@ -438,6 +440,25 @@
           setLayerFillOpacity(entry.layer, targetOpacity);
         }
       });
+    },
+
+    /**
+     * フローティングパネル内の「レイヤー全体ゾーニング集計」カードを更新する
+     */
+    updateLayerTotalSummary() {
+      const summaryContainer = document.getElementById('batch-zoning-summary');
+      if (!summaryContainer) return;
+
+      if (!GIS.ZoningAnalysis) {
+        summaryContainer.innerHTML = '';
+        return;
+      }
+
+      const batchSelect = document.getElementById('batch-mask-select');
+      const maskLayerId = batchSelect ? batchSelect.value : 'all';
+
+      const summaryHtml = GIS.ZoningAnalysis.analyzeLayerTotalZoning(maskLayerId);
+      summaryContainer.innerHTML = summaryHtml;
     }
 
   };

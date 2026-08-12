@@ -40,6 +40,7 @@
 .panel-title {
   background: linear-gradient(135deg, #a7f3d0 0%, #34d399 50%, #10b981 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 800;
 }
@@ -238,6 +239,7 @@
   outline: none;
   cursor: pointer;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .zoning-slider::-webkit-slider-thumb {
@@ -529,3 +531,28 @@
 .fill-z2 { background: #ef4444; }
 .fill-z3 { background: #3b82f6; }
 .fill-z4 { background: #f59e0b; }
+
+/* サイドパネル用全体ゾーニング集計カード */
+.batch-zoning-summary {
+  margin-top: 4px;
+}
+
+.zoning-summary-card {
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(0, 215, 255, 0.4);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.zoning-summary-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed rgba(56, 189, 248, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
