@@ -360,6 +360,76 @@
           this.updateSymbology(layerId, { maskLayerId });
         });
       }
+    },
+
+    /**
+     * すべての GeoTIFF ドロワーおよび一括マスク選択バー内のドロップダウン選択肢を最新化する
+     */
+    updateAllMaskSelectOptions() {
+      if (!GIS.AppState || !GIS.AppState.layers) return;
+
+      // 一括マスクセレクターの更新
+      const batchSelect = document.getElementById('batch-mask-select');
+      if (batchSelect) {
+        const currentBatch = batchSelect.value || 'all';
+        batchSelect.innerHTML = `
+          <option value="all" ${currentBatch === 'all' ? 'selected' : ''}>すべてのポリゴンレイヤー</option>
+          <option value="none" ${currentBatch === 'none' ? 'selected' : ''}>なし (全体表示)</option>
+          ${this._getVectorLayerOptions(currentBatch)}
+        `;
+      }
+
+      // 個別GeoTIFFドロワー内セレクターの更新
+      GIS.AppState.layers.forEach((entry, id) => {
+        if (entry.type === 'geotiff' && entry.geotiffInfo) {
+          const selectEl = document.getElementById(`zoning-mask-${id}`);
+          if (selectEl) {
+            const currentVal = entry.geotiffInfo.maskLayerId || 'all';
+            selectEl.innerHTML = `
+              <option value="all" ${currentVal === 'all' ? 'selected' : ''}>すべてのポリゴンレイヤー</option>
+              <option value="none" ${currentVal === 'none' ? 'selected' : ''}>なし (全体表示)</option>
+              ${this._getVectorLayerOptions(currentVal)}
+            `;
+          }
+        }
+      });
+    },
+
+    /**
+     * ベクトルレイヤーの追加・削除・表示切替時に、マスクが設定されている GeoTIFF を自動再描画する
+     * @param {string|null} changedVectorLayerId 
+     */
+    async refreshMaskedGeoTIFFs(changedVectorLayerId = null) {
+      if (!GIS.AppState || !GIS.AppState.layers) return;
+      const promises = [];
+      GIS.AppState.layers.forEach((entry, id) => {
+        if (entry.type === 'geotiff' && entry.geotiffInfo) {
+          const maskId = entry.geotiffInfo.maskLayerId || 'all';
+          if (maskId === 'all' || (changedVectorLayerId && maskId === changedVectorLayerId)) {
+            promises.push(this.updateSymbology(id));
+          }
+        }
+      });
+      await Promise.all(promises);
+    },
+
+    /**
+     * 全GeoTIFFレイヤーに対して一括でマスクレイヤーIDを設定し、再描画する
+     * @param {string} maskLayerId 
+     */
+    async applyBatchMask(maskLayerId) {
+      if (!GIS.AppState || !GIS.AppState.layers) return;
+      const promises = [];
+      GIS.AppState.layers.forEach((entry, id) => {
+        if (entry.type === 'geotiff' && entry.geotiffInfo) {
+          entry.geotiffInfo.maskLayerId = maskLayerId;
+          const selectEl = document.getElementById(`zoning-mask-${id}`);
+          if (selectEl) selectEl.value = maskLayerId;
+          promises.push(this.updateSymbology(id, { maskLayerId }));
+        }
+      });
+      await Promise.all(promises);
+      GIS.UI.showToast(`✂️ 全GeoTIFFのマスク範囲を一括変更しました`, 'info');
     }
 
   };

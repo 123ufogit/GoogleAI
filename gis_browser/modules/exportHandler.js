@@ -17,16 +17,58 @@
   GIS.ExportHandler = {
 
     /**
-     * 全ピンをGeoJSON形式でダウンロードする
+     * AppState 内の全ベクトルレイヤー (手描きポリゴン、KML、GeoJSON) の Feature 一覧を取得
+     */
+    _getVectorFeatures() {
+      const features = [];
+      if (!GIS.AppState || !GIS.AppState.layers) return features;
+
+      GIS.AppState.layers.forEach((entry) => {
+        if (entry.type === 'geotiff' || entry.type === 'pin') return;
+
+        let geojson = entry.rawGeoJSON;
+        if (!geojson && entry.layer && typeof entry.layer.toGeoJSON === 'function') {
+          try { geojson = entry.layer.toGeoJSON(); } catch (_) {}
+        }
+
+        if (!geojson) return;
+
+        if (geojson.type === 'FeatureCollection' && Array.isArray(geojson.features)) {
+          geojson.features.forEach(f => {
+            const copy = JSON.parse(JSON.stringify(f));
+            if (!copy.properties) copy.properties = {};
+            if (!copy.properties.name) copy.properties.name = entry.name;
+            features.push(copy);
+          });
+        } else if (geojson.type === 'Feature') {
+          const copy = JSON.parse(JSON.stringify(geojson));
+          if (!copy.properties) copy.properties = {};
+          if (!copy.properties.name) copy.properties.name = entry.name;
+          features.push(copy);
+        } else if (geojson.type && geojson.coordinates) {
+          features.push({
+            type: 'Feature',
+            geometry: geojson,
+            properties: { name: entry.name }
+          });
+        }
+      });
+      return features;
+    },
+
+    /**
+     * 全ピンおよびベクトルデータ (ポリゴン等) をGeoJSON形式でダウンロードする
      */
     exportGeoJSON() {
-      const pins = GIS.AppState.pins;
-      if (!pins.length) {
-        GIS.UI.showToast('⚠️ エクスポートするピンがありません', 'warn');
+      const pins = GIS.AppState.pins || [];
+      const vectorFeatures = this._getVectorFeatures();
+
+      if (!pins.length && !vectorFeatures.length) {
+        GIS.UI.showToast('⚠️ エクスポートするデータ（ピンまたはポリゴン等）がありません', 'warn');
         return;
       }
 
-      const features = pins.map(pin => ({
+      const pinFeatures = pins.map(pin => ({
         type: 'Feature',
         geometry: {
           type: 'Point',
@@ -39,6 +81,8 @@
           timestamp: new Date().toISOString()
         }
       }));
+
+      const features = [...pinFeatures, ...vectorFeatures];
 
       const geojson = {
         type: 'FeatureCollection',
@@ -53,23 +97,25 @@
       const json = JSON.stringify(geojson, null, 2);
       this._download(
         new Blob([json], { type: 'application/geo+json' }),
-        `gis_pins_${this._timestamp()}.geojson`
+        `gis_export_${this._timestamp()}.geojson`
       );
 
-      GIS.UI.showToast(`✅ GeoJSONを保存しました (${features.length}ピン)`, 'success');
+      GIS.UI.showToast(`✅ GeoJSONを保存しました (ピン: ${pinFeatures.length}, 図形: ${vectorFeatures.length})`, 'success');
     },
 
     /**
-     * 全ピンをKML形式でダウンロードする
+     * 全ピンおよびベクトルデータ (ポリゴン等) をKML形式でダウンロードする
      */
     exportKML() {
-      const pins = GIS.AppState.pins;
-      if (!pins.length) {
-        GIS.UI.showToast('⚠️ エクスポートするピンがありません', 'warn');
+      const pins = GIS.AppState.pins || [];
+      const vectorFeatures = this._getVectorFeatures();
+
+      if (!pins.length && !vectorFeatures.length) {
+        GIS.UI.showToast('⚠️ エクスポートするデータ（ピンまたはポリゴン等）がありません', 'warn');
         return;
       }
 
-      const placemarks = pins.map(pin => `
+      const pinPlacemarks = pins.map(pin => `
     <Placemark>
       <name>${this._escXml(pin.filename)}</name>
       <description><![CDATA[
@@ -92,21 +138,71 @@
       </Point>
     </Placemark>`).join('\n');
 
+      const vectorPlacemarks = vectorFeatures.map((f, i) => {
+        const name = this._escXml(f.properties?.name || `Polygon ${i + 1}`);
+        const geom = f.geometry;
+        if (!geom) return '';
+
+        let kmlGeom = '';
+        if (geom.type === 'Polygon') {
+          const outerRing = geom.coordinates[0] || [];
+          const coordsStr = outerRing.map(pt => `${pt[0]},${pt[1]},0`).join(' ');
+          kmlGeom = `
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>${coordsStr}</coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>`;
+        } else if (geom.type === 'MultiPolygon') {
+          const polys = geom.coordinates.map(poly => {
+            const outerRing = poly[0] || [];
+            const coordsStr = outerRing.map(pt => `${pt[0]},${pt[1]},0`).join(' ');
+            return `
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>${coordsStr}</coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>`;
+          }).join('\n');
+          kmlGeom = `<MultiGeometry>${polys}</MultiGeometry>`;
+        } else if (geom.type === 'LineString') {
+          const coordsStr = geom.coordinates.map(pt => `${pt[0]},${pt[1]},0`).join(' ');
+          kmlGeom = `<LineString><coordinates>${coordsStr}</coordinates></LineString>`;
+        } else if (geom.type === 'Point') {
+          kmlGeom = `<Point><coordinates>${geom.coordinates[0]},${geom.coordinates[1]},0</coordinates></Point>`;
+        }
+
+        return `
+    <Placemark>
+      <name>${name}</name>
+      <Style>
+        <LineStyle><color>ff00d7ff</color><width>2</width></LineStyle>
+        <PolyStyle><color>7f00d7ff</color></PolyStyle>
+      </Style>
+      ${kmlGeom}
+    </Placemark>`;
+      }).filter(Boolean).join('\n');
+
       const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>GIS Browser エクスポート</name>
     <description>生成日時: ${new Date().toLocaleString('ja-JP')}</description>
-    ${placemarks}
+    ${pinPlacemarks}
+    ${vectorPlacemarks}
   </Document>
 </kml>`;
 
       this._download(
         new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }),
-        `gis_pins_${this._timestamp()}.kml`
+        `gis_export_${this._timestamp()}.kml`
       );
 
-      GIS.UI.showToast(`✅ KMLを保存しました (${pins.length}ピン)`, 'success');
+      GIS.UI.showToast(`✅ KMLを保存しました (ピン: ${pins.length}, 図形: ${vectorFeatures.length})`, 'success');
     },
 
     /**

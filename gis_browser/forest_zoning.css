@@ -385,3 +385,70 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
 }
+
+/* 一括マスク設定バー＆手描きポリゴンボタン */
+.batch-mask-bar {
+  margin: 8px 0 12px 0;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px dashed var(--color-border-acc);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.batch-mask-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.batch-mask-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-sub);
+}
+
+.btn-draw-polygon {
+  background: linear-gradient(135deg, rgba(0, 215, 255, 0.2), rgba(16, 185, 129, 0.2));
+  border: 1px solid #00d7ff;
+  color: #00d7ff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-draw-polygon:hover {
+  background: #00d7ff;
+  color: #06150e;
+  box-shadow: 0 0 10px rgba(0, 215, 255, 0.4);
+}
+
+/* ポリゴン描画中ガイド案内バナー */
+.polygon-draw-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #00d7ff;
+  color: #f8fafc;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.polygon-draw-banner.hidden {
+  display: none !important;
+}

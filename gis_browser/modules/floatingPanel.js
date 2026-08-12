@@ -49,11 +49,54 @@
         fileInput.value = ''; // リセット
       });
 
+      // 一括マスク設定セレクター
+      const batchMaskSelect = document.getElementById('batch-mask-select');
+      if (batchMaskSelect) {
+        batchMaskSelect.addEventListener('change', (e) => {
+          if (GIS.ZoningHandler) {
+            GIS.ZoningHandler.applyBatchMask(e.target.value);
+          }
+        });
+      }
+
+      // 手描きポリゴン作成ボタン
+      const btnDrawPolygon = document.getElementById('btn-draw-polygon');
+      if (btnDrawPolygon) {
+        btnDrawPolygon.addEventListener('click', () => {
+          if (GIS.PolygonDrawer) {
+            GIS.PolygonDrawer.startDrawing();
+          }
+        });
+      }
+
       // 状態変化を反映
-      GIS.AppState.on('layerAdded', (entry) => this._addLayerItem(entry));
-      GIS.AppState.on('layerRemoved', ({ id }) => this._removeLayerItem(id));
-      GIS.AppState.on('layerToggled', ({ id, visible }) => this._updateLayerItemVisibility(id, visible));
-      GIS.AppState.on('allLayersCleared', () => this._clearLayerList());
+      GIS.AppState.on('layerAdded', (entry) => {
+        this._addLayerItem(entry);
+        if (GIS.ZoningHandler) {
+          GIS.ZoningHandler.updateAllMaskSelectOptions();
+          GIS.ZoningHandler.refreshMaskedGeoTIFFs(entry.id);
+        }
+      });
+      GIS.AppState.on('layerRemoved', ({ id }) => {
+        this._removeLayerItem(id);
+        if (GIS.ZoningHandler) {
+          GIS.ZoningHandler.updateAllMaskSelectOptions();
+          GIS.ZoningHandler.refreshMaskedGeoTIFFs(id);
+        }
+      });
+      GIS.AppState.on('layerToggled', ({ id, visible }) => {
+        this._updateLayerItemVisibility(id, visible);
+        if (GIS.ZoningHandler) {
+          GIS.ZoningHandler.updateAllMaskSelectOptions();
+          GIS.ZoningHandler.refreshMaskedGeoTIFFs(id);
+        }
+      });
+      GIS.AppState.on('allLayersCleared', () => {
+        this._clearLayerList();
+        if (GIS.ZoningHandler) {
+          GIS.ZoningHandler.updateAllMaskSelectOptions();
+        }
+      });
     },
 
     /**

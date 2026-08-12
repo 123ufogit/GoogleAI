@@ -90,6 +90,21 @@
             🗑 全削除
           </button>
         </div>
+
+        <!-- 一括マスク設定＆手描きポリゴンボタン -->
+        <div class="batch-mask-bar">
+          <div class="batch-mask-header">
+            <span class="batch-mask-label">✂️ 全GeoTIFF一括マスク:</span>
+            <button id="btn-draw-polygon" class="btn-draw-polygon" title="地図上にマウスでポリゴンを手描き作成">
+              ✏️ 手描き作成
+            </button>
+          </div>
+          <select id="batch-mask-select" class="zoning-mask-select">
+            <option value="all">すべてのポリゴンレイヤー</option>
+            <option value="none">なし (全体表示)</option>
+          </select>
+        </div>
+
         <ul id="layer-list" class="layer-list" role="list" aria-label="読み込み済みレイヤー">
           <li class="layer-list-empty">GeoTIFFやGISデータがありません</li>
         </ul>
@@ -282,6 +297,7 @@
   <script src="modules/vectorTileMask.js"></script>
   <script src="modules/geotiffHandler.js"></script>
   <script src="modules/zoningHandler.js"></script>
+  <script src="modules/polygonDrawer.js"></script>
   <script src="modules/kmlParser.js"></script>
   <script src="modules/geojsonHandler.js"></script>
   <script src="modules/gpxHandler.js"></script>

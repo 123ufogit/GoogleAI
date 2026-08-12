@@ -173,6 +173,7 @@
             samplesPerPixel: rasterResult.samplesPerPixel,
             bounds: bounds,
             useForestMask: true,
+            maskLayerId: document.getElementById('batch-mask-select')?.value || 'all',
             threshold: 4.0,
             colorLow: '#00d7ff',
             colorHigh: '#ffff00',
