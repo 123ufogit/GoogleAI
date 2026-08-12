@@ -411,6 +411,7 @@
         }
       });
       await Promise.all(promises);
+      this.updateMaskPolygonStyles();
     },
 
     /**
@@ -429,7 +430,48 @@
         }
       });
       await Promise.all(promises);
+      this.updateMaskPolygonStyles();
       GIS.UI.showToast(`✂️ 全GeoTIFFのマスク範囲を一括変更しました`, 'info');
+    },
+
+    /**
+     * マスクとして使用されているベクトルレイヤーの塗りつぶし透過度 (fillOpacity) を調整する
+     * マスク対象のポリゴンは fillOpacity: 0 (塗りつぶし透過) にして GeoTIFF の見た目を損なわないようにする
+     */
+    updateMaskPolygonStyles() {
+      if (!GIS.AppState || !GIS.AppState.layers) return;
+
+      const activeMaskLayerIds = new Set();
+      let hasAllMask = false;
+
+      GIS.AppState.layers.forEach((entry) => {
+        if (entry.type === 'geotiff' && entry.visible && entry.geotiffInfo) {
+          const maskId = entry.geotiffInfo.maskLayerId || 'all';
+          if (maskId === 'all') {
+            hasAllMask = true;
+          } else if (maskId !== 'none') {
+            activeMaskLayerIds.add(maskId);
+          }
+        }
+      });
+
+      const setLayerFillOpacity = (layer, fillOpacity) => {
+        if (!layer) return;
+        if (typeof layer.setStyle === 'function') {
+          try { layer.setStyle({ fillOpacity }); } catch (_) {}
+        }
+        if (typeof layer.eachLayer === 'function') {
+          layer.eachLayer(subLayer => setLayerFillOpacity(subLayer, fillOpacity));
+        }
+      };
+
+      GIS.AppState.layers.forEach((entry, id) => {
+        if (entry.type !== 'geotiff' && entry.type !== 'pin' && entry.layer) {
+          const isUsedAsMask = hasAllMask || activeMaskLayerIds.has(id);
+          const targetOpacity = isUsedAsMask ? 0 : 0.3;
+          setLayerFillOpacity(entry.layer, targetOpacity);
+        }
+      });
     }
 
   };

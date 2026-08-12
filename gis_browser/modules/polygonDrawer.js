@@ -163,12 +163,12 @@
       this._polygonCount++;
       const polygonName = `手描きマスク ${this._polygonCount}`;
 
-      // Leaflet Polygon レイヤーの作成
+      // Leaflet Polygon レイヤーの作成 (塗りつぶし透過でGeoTIFFの色に影響を与えない)
       const polygonLayer = L.polygon(this._points, {
         color: '#00d7ff',
         weight: 2,
         fillColor: '#00d7ff',
-        fillOpacity: 0.3
+        fillOpacity: 0
       });
 
       // GeoJSON データ構造の構築 ([lng, lat] 順)
