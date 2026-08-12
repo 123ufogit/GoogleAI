@@ -179,6 +179,31 @@
         coordinates.push([...coordinates[0]]);
       }
 
+      // 面積計算と動的ポップアップバインド
+      const area = this._calcPolygonArea(coordinates);
+      const formattedArea = area >= 10000 
+        ? `${(area / 10000).toFixed(2)} ha (${Math.round(area).toLocaleString()} m²)`
+        : `${area.toFixed(1)} m²`;
+
+      const createPopupHtml = () => {
+        let zoningHtml = '';
+        if (GIS.ZoningAnalysis) {
+          const geom = { type: 'Polygon', coordinates: [coordinates] };
+          zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, area);
+        }
+        return `
+          <div class="geojson-popup">
+            <strong class="popup-name">✏️ ${polygonName}</strong>
+            <div class="popup-measure-badge popup-area" style="margin-top:6px;">
+              📐 面積: <strong>${formattedArea}</strong>
+            </div>
+            ${zoningHtml}
+          </div>
+        `;
+      };
+
+      polygonLayer.bindPopup(createPopupHtml, { maxWidth: 320 });
+
       const rawGeoJSON = {
         type: 'FeatureCollection',
         features: [
@@ -190,6 +215,7 @@
             },
             properties: {
               name: polygonName,
+              area: area,
               isDrawn: true
             }
           }
@@ -253,6 +279,24 @@
       } else if (banner) {
         banner.classList.add('hidden');
       }
+    },
+
+    /**
+     * ポリゴンリング（[lon,lat] 配列）の球面積を計算する（m²）
+     */
+    _calcPolygonArea(ring) {
+      if (!ring || ring.length < 3) return 0;
+      const R = 6378137; // 地球半径 (m)
+      const rad = d => (d * Math.PI) / 180;
+      let area = 0;
+      const n = ring.length;
+      for (let i = 0; i < n; i++) {
+        const p1 = ring[i];
+        const p2 = ring[(i + 1) % n];
+        area += rad(p2[0] - p1[0]) * (2 + Math.sin(rad(p1[1])) + Math.sin(rad(p2[1])));
+      }
+      area = Math.abs((area * R * R) / 2.0);
+      return area;
     }
   };
 

@@ -148,6 +148,7 @@
 
       // 面積・距離バッジを生成
       let measureBadge = '';
+      let zoningHtml = '';
       if (geom) {
         const type = geom.type;
         if (type === 'Polygon' || type === 'MultiPolygon') {
@@ -159,6 +160,10 @@
           measureBadge = `<div class="popup-measure-badge popup-area">
             📐 面積: <strong>${this._formatArea(totalArea)}</strong>
           </div>`;
+
+          if (GIS.ZoningAnalysis) {
+            zoningHtml = GIS.ZoningAnalysis.analyzePolygonZoning(geom, totalArea);
+          }
         } else if (type === 'LineString' || type === 'MultiLineString') {
           const lines = type === 'LineString'
             ? [geom.coordinates]
@@ -175,6 +180,7 @@
         ${name ? `<strong class="popup-name">${this._escHtml(name)}</strong>` : ''}
         ${props.description ? `<p class="popup-desc">${this._escHtml(String(props.description))}</p>` : ''}
         ${measureBadge}
+        ${zoningHtml}
         ${tableRows ? `<table class="popup-table">${tableRows}</table>` : ''}
       </div>`;
 
