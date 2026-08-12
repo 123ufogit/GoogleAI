@@ -357,13 +357,12 @@
         }
       }
 
-      // ポリゴンが存在する場合、destination-in で範囲外を透明化
-      if (hasPolygons) {
-        const geoCtx = geoCanvas.getContext('2d');
-        geoCtx.globalCompositeOperation = 'destination-in';
-        geoCtx.drawImage(maskCanvas, 0, 0);
-        geoCtx.globalCompositeOperation = 'source-over';
-      }
+      // マスクCanvas (森林計画対象ポリゴン部分のみ白 #ffffff で塗られた画像) を GeoTIFF Canvas に destination-in 合成
+      // 範囲外のピクセルは全て完全透明 (alpha = 0) となる
+      const geoCtx = geoCanvas.getContext('2d');
+      geoCtx.globalCompositeOperation = 'destination-in';
+      geoCtx.drawImage(maskCanvas, 0, 0);
+      geoCtx.globalCompositeOperation = 'source-over';
 
       return geoCanvas;
     },
@@ -385,10 +384,10 @@
      * LatLng を GeoTIFF Canvas ピクセル座標に変換
      */
     _latLngToCanvasPx(lat, lng, bounds, outW, outH) {
-      const minLat = bounds.getSouth();
-      const maxLat = bounds.getNorth();
-      const minLng = bounds.getWest();
-      const maxLng = bounds.getEast();
+      const minLat = typeof bounds.getSouth === 'function' ? bounds.getSouth() : (bounds.minLat ?? bounds._southWest?.lat);
+      const maxLat = typeof bounds.getNorth === 'function' ? bounds.getNorth() : (bounds.maxLat ?? bounds._northEast?.lat);
+      const minLng = typeof bounds.getWest === 'function' ? bounds.getWest() : (bounds.minLng ?? bounds._southWest?.lng);
+      const maxLng = typeof bounds.getEast === 'function' ? bounds.getEast() : (bounds.maxLng ?? bounds._northEast?.lng);
 
       const cx = ((lng - minLng) / (maxLng - minLng)) * outW;
       const cy = ((maxLat - lat) / (maxLat - minLat)) * outH;

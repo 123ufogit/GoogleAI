@@ -182,6 +182,14 @@
           }
         });
 
+        // 初回読み込み直後に 0〜9 閾値 ＆ 森林計画ベクトルタイルマスクを自動適用
+        if (GIS.ZoningHandler) {
+          const newLayerId = Array.from(GIS.AppState.layers.keys()).pop();
+          if (newLayerId) {
+            GIS.ZoningHandler.updateSymbology(newLayerId);
+          }
+        }
+
         GIS.AppState.map.fitBounds(bounds, { padding: [40, 40] });
         GIS.UI.hideProgress();
         GIS.UI.showToast(
