@@ -178,24 +178,69 @@
       const formatArea = (m2) => m2 >= 10000 ? `${(m2 / 10000).toFixed(2)} ha` : `${m2.toFixed(0)} m²`;
       const modeName = GIS.UI ? GIS.UI.escHtml(geotiffEntry.name || 'GeoTIFF') : (geotiffEntry.name || 'GeoTIFF');
 
+      const colorHigh = info.colorHigh || '#ffff00';
+      const colorLow = info.colorLow || '#00d7ff';
+
       return `
         <div class="zoning-analysis-card">
           <div class="zoning-analysis-title">📊 ゾーニング解析 (${modeName})</div>
           <div class="zoning-item zoning-high">
-            <span class="zoning-badge badge-high">高 (5〜9)</span>
+            <span class="zoning-badge" style="background:${colorHigh}; color:${this._getTextColor(colorHigh)};">高 (5〜9)</span>
             <span class="zoning-val">${countHigh} px (${formatArea(areaHigh)})</span>
             <span class="zoning-pct">${pctHigh}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-high" style="width:${pctHigh}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${pctHigh}%; background:${colorHigh};"></div></div>
 
           <div class="zoning-item zoning-low" style="margin-top:6px;">
-            <span class="zoning-badge badge-low">低 (0〜4)</span>
+            <span class="zoning-badge" style="background:${colorLow}; color:${this._getTextColor(colorLow)};">低 (0〜4)</span>
             <span class="zoning-val">${countLow} px (${formatArea(areaLow)})</span>
             <span class="zoning-pct">${pctLow}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-low" style="width:${pctLow}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${pctLow}%; background:${colorLow};"></div></div>
         </div>
       `;
+    },
+
+    /**
+     * Hex カラーコードを {r, g, b} オブジェクトに変換
+     */
+    _hexToRgb(hex) {
+      let c = (hex || '#000000').replace('#', '');
+      if (c.length === 3) c = c.split('').map(x => x + x).join('');
+      const num = parseInt(c, 16);
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    },
+
+    /**
+     * 2つの Hex カラーを透過率 50% ずつで重ね合わせた合成色 rgb(...) を計算する
+     */
+    _blendColors50(hex1, hex2) {
+      const c1 = this._hexToRgb(hex1);
+      const c2 = this._hexToRgb(hex2);
+      const r = Math.round(c1.r * 0.5 + c2.r * 0.5);
+      const g = Math.round(c1.g * 0.5 + c2.g * 0.5);
+      const b = Math.round(c1.b * 0.5 + c2.b * 0.5);
+      return `rgb(${r}, ${g}, ${b})`;
+    },
+
+    /**
+     * 背景色に応じた最適な視認性の高い文字色 (#000000 または #ffffff) を判定
+     */
+    _getTextColor(colorStr) {
+      let r = 128, g = 128, b = 128;
+      if (colorStr.startsWith('rgb')) {
+        const matches = colorStr.match(/\d+/g);
+        if (matches && matches.length >= 3) {
+          r = parseInt(matches[0], 10);
+          g = parseInt(matches[1], 10);
+          b = parseInt(matches[2], 10);
+        }
+      } else {
+        const rgb = this._hexToRgb(colorStr);
+        r = rgb.r; g = rgb.g; b = rgb.b;
+      }
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness > 140 ? '#000000' : '#ffffff';
     },
 
     /**
@@ -216,6 +261,18 @@
 
       const { rasterData: rDataP, outW: outWP, outH: outHP, bounds: boundsP, samplesPerPixel: strideP = 1 } = infoP;
       const { rasterData: rDataR, outW: outWR, outH: outHR, bounds: boundsR, samplesPerPixel: strideR = 1 } = infoR;
+
+      // 各レイヤー設定に基づく高・低カラーコード
+      const profHigh = infoP.colorHigh || '#ffff00';
+      const profLow  = infoP.colorLow  || '#00d7ff';
+      const riskHigh = infoR.colorHigh || '#ff55ff';
+      const riskLow  = infoR.colorLow  || '#00d7ff';
+
+      // 50% 透過重畳色の動的計算
+      const colorZ1 = this._blendColors50(profHigh, riskLow);  // 収益高 / リスク低
+      const colorZ2 = this._blendColors50(profHigh, riskHigh); // 収益高 / リスク高
+      const colorZ3 = this._blendColors50(profLow,  riskLow);  // 収益低 / リスク低
+      const colorZ4 = this._blendColors50(profLow,  riskHigh); // 収益低 / リスク高
 
       const minLatP = typeof boundsP.getSouth === 'function' ? boundsP.getSouth() : boundsP.minLat;
       const maxLatP = typeof boundsP.getNorth === 'function' ? boundsP.getNorth() : boundsP.maxLat;
@@ -295,32 +352,32 @@
           <div class="zoning-analysis-title">🌲 ゾーニング重畳解析 (2層)</div>
           
           <div class="zoning-item">
-            <span class="zoning-badge z1-badge">ゾーニング１ (収益高/リスク低)</span>
+            <span class="zoning-badge" style="background:${colorZ1}; color:${this._getTextColor(colorZ1)};">ゾーニング１ (収益高/リスク低)</span>
             <span class="zoning-val">${z1.count} px (${z1.areaStr})</span>
             <span class="zoning-pct">${z1.pct}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-z1" style="width:${z1.pct}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${z1.pct}%; background:${colorZ1};"></div></div>
 
           <div class="zoning-item" style="margin-top:4px;">
-            <span class="zoning-badge z2-badge">ゾーニング２ (収益高/リスク高)</span>
+            <span class="zoning-badge" style="background:${colorZ2}; color:${this._getTextColor(colorZ2)};">ゾーニング２ (収益高/リスク高)</span>
             <span class="zoning-val">${z2.count} px (${z2.areaStr})</span>
             <span class="zoning-pct">${z2.pct}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-z2" style="width:${z2.pct}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${z2.pct}%; background:${colorZ2};"></div></div>
 
           <div class="zoning-item" style="margin-top:4px;">
-            <span class="zoning-badge z3-badge">ゾーニング３ (収益低/リスク低)</span>
+            <span class="zoning-badge" style="background:${colorZ3}; color:${this._getTextColor(colorZ3)};">ゾーニング３ (収益低/リスク低)</span>
             <span class="zoning-val">${z3.count} px (${z3.areaStr})</span>
             <span class="zoning-pct">${z3.pct}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-z3" style="width:${z3.pct}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${z3.pct}%; background:${colorZ3};"></div></div>
 
           <div class="zoning-item" style="margin-top:4px;">
-            <span class="zoning-badge z4-badge">ゾーニング４ (収益低/リスク高)</span>
+            <span class="zoning-badge" style="background:${colorZ4}; color:${this._getTextColor(colorZ4)};">ゾーニング４ (収益低/リスク高)</span>
             <span class="zoning-val">${z4.count} px (${z4.areaStr})</span>
             <span class="zoning-pct">${z4.pct}%</span>
           </div>
-          <div class="zoning-bar-bg"><div class="zoning-bar-fill fill-z4" style="width:${z4.pct}%"></div></div>
+          <div class="zoning-bar-bg"><div class="zoning-bar-fill" style="width:${z4.pct}%; background:${colorZ4};"></div></div>
         </div>
       `;
     }
